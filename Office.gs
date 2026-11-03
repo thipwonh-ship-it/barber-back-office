@@ -171,6 +171,7 @@ function confirmPaid(ymStr, slips) {
 
 /* ---------- เพิ่ม/แก้ช่าง (ทิพย์) ---------- */
 function barberSave(p) {
+  clearMemo();
   const name = clean(p.name, 30); if (!name) return { ok: false, msg: 'ใส่ชื่อ' }; const s = sh(SH_SET); const b = barberByName(name);
   let row = b ? b.row : 0;
   if (!row) { const names = s.getRange(B_ROW0, 1, B_ROWS, 1).getValues().map(r => String(r[0]).trim()); const i = names.indexOf(''); if (i < 0) return { ok: false, msg: 'แถวช่างเต็ม (20 คน) ลบช่างเก่าออกก่อน' }; row = B_ROW0 + i; }

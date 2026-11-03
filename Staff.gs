@@ -8,6 +8,7 @@ function whoAmI(tok) {
 }
 /** ผูกบัญชี LINE กับช่างด้วย PIN (ครั้งแรกครั้งเดียว) */
 function bindLine(tok, pin) {
+  clearMemo();
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     const s = session(tok); if (!s) return { ok: false, msg: 'หมดเวลา กรุณาปิดแล้วกดเมนูในไลน์ใหม่' };

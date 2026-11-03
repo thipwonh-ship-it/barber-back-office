@@ -36,8 +36,11 @@ const CASH_FROM = 'เงินสดร้าน';
 const SESSION_HOURS = 6, ADT_DAYS = 90, ADT_MAX = 6;
 const FOLDER_NAME = 'Barber Back Office';
 
-function ss() { return SpreadsheetApp.openById(SHEET_ID()); }
-function sh(n) { const s = ss().getSheetByName(n); if (!s) throw new Error('ไม่พบแผ่น ' + n); return s; }
+// memo ต่อ 1 execution (ลดเวลา openById/อ่านแผ่นซ้ำ) — เรียก clearMemo() หลังแก้แผ่น ตั้งค่า
+const _M = {};
+function clearMemo() { Object.keys(_M).forEach(k => delete _M[k]); }
+function ss() { return _M.ss || (_M.ss = SpreadsheetApp.openById(SHEET_ID())); }
+function sh(n) { if (_M['sh:' + n]) return _M['sh:' + n]; const s = ss().getSheetByName(n); if (!s) throw new Error('ไม่พบแผ่น ' + n); return (_M['sh:' + n] = s); }
 function ymd(d) { return Utilities.formatDate(d, TZ, 'yyyy-MM-dd'); }
 function ym(d) { return Utilities.formatDate(d, TZ, 'yyyy-MM'); }
 function hm(d) { return Utilities.formatDate(d, TZ, 'HH:mm'); }
@@ -51,16 +54,17 @@ function clean(s, n) { return String(s || '').replace(/[\r\n\t]+/g, ' ').replace
 
 /* ---------- ตั้งค่า ---------- */
 function barbers(all) {
-  const rows = sh(SH_SET).getRange(B_ROW0, 1, B_ROWS, 10).getValues();
-  return rows.map((r, i) => ({ row: B_ROW0 + i, name: String(r[0]).trim(), shop: String(r[1]).trim(), min: num(r[2]), sso: num(r[3]), daily: r[4] === true, pin: String(r[5]).trim(), uid: String(r[6]).trim(), start: dateKey(r[7]), end: dateKey(r[8]) }))
-    .filter(b => b.name && (all || !b.end));
+  if (!_M.barbers) { const rows = sh(SH_SET).getRange(B_ROW0, 1, B_ROWS, 10).getValues();
+    _M.barbers = rows.map((r, i) => ({ row: B_ROW0 + i, name: String(r[0]).trim(), shop: String(r[1]).trim(), min: num(r[2]), sso: num(r[3]), daily: r[4] === true, pin: String(r[5]).trim(), uid: String(r[6]).trim(), start: dateKey(r[7]), end: dateKey(r[8]) })).filter(b => b.name); }
+  return _M.barbers.filter(b => all || !b.end);
 }
 function barberByName(n) { return barbers(true).find(b => b.name === String(n || '').trim()) || null; }
 function barberByUid(uid) { uid = String(uid || '').trim(); return uid ? barbers(false).find(b => b.uid === uid) || null : null; }
 function barberByPin(pin) { pin = String(pin || '').trim(); if (!pin) return null; const h = barbers(false).filter(b => b.pin === pin); return h.length === 1 ? h[0] : null; }
 function shops() {
+  if (_M.shops) return _M.shops;
   const rows = sh(SH_SET).getRange(S_ROW0, 1, S_ROWS, 12).getValues();
-  return rows.filter(r => r[0]).map(r => ({ name: String(r[0]).trim(), method: String(r[1]).trim(), rate: num(r[2]), bonus: num(r[3]), lat: num(r[4]), lng: num(r[5]), radius: num(r[6]) || 150, open1: tStr(r[7]), open2: tStr(r[8]), close: tStr(r[9]), cash0: num(r[10]), cashFrom: dateKey(r[11]) }));
+  return _M.shops = rows.filter(r => r[0]).map(r => ({ name: String(r[0]).trim(), method: String(r[1]).trim(), rate: num(r[2]), bonus: num(r[3]), lat: num(r[4]), lng: num(r[5]), radius: num(r[6]) || 150, open1: tStr(r[7]), open2: tStr(r[8]), close: tStr(r[9]), cash0: num(r[10]), cashFrom: dateKey(r[11]) }));
 }
 function tStr(v) { if (v instanceof Date) return hm(v); const m = /^(\d{1,2}):(\d{2})/.exec(String(v || '')); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : ''; }
 function expenseTypes() { return sh(SH_SET).getRange('A60:A69').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
