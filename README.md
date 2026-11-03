@@ -9,7 +9,7 @@
 ## ภาพรวม
 
 ```
-ช่าง ──LINE OA @529vfxbd (Rich menu) ──▶ docs/index.html (LIFF, github.io) ──ID token──▶ Apps Script (Index.html)
+ช่าง ──LINE OA @529vfxbd (Rich menu) ──▶ docs/index.html (หน้าช่าง LIFF, github.io) ──JSON API (session/staff)──▶ Apps Script (Staff.gs)
                                                                                          │  ลงเวลา GPS · หยิบเงินสด · เก็บเงินสด · สลิป
 ทิพย์/ปิ๊ก ──ไอคอนบนมือถือ──▶ docs/admin.html (แอป Dashboard, github.io) ──JSON API──▶ Apps Script (Office.gs)
                                                                                          │  วันนี้ · กรอกยอด · รายจ่าย · โอนรายวัน · รายเดือน · เงินเดือน
@@ -27,9 +27,9 @@
 | `Office.gs` | API แอป Dashboard: วันนี้, กรอกยอด (คิดค่าแรง), รายจ่าย, โอนรายวัน, รายเดือน, เงินเดือน, ปิดงวด, โอนแล้ว, จัดการช่าง |
 | `Slip.gs` | สลิปเงินเดือน PDF (Google Docs → PDF) |
 | `Manuals.gs` | คู่มือตามบทบาท (พิมพ์ "คู่มือ" ในไลน์) |
-| `Index.html` | หน้าช่าง (รันใน LINE) |
+| `Index.html` | หน้าช่างแบบเก่า (รันใน GAS โดยตรง — ไม่ได้ใช้แล้ว เก็บไว้สำรอง) |
 | `appsscript.json` | ค่าโปรเจกต์ Apps Script |
-| `docs/index.html` | หน้าทางผ่าน LIFF → ส่ง ID token ไป Apps Script |
+| `docs/index.html` | หน้าช่าง (LIFF): ลงเวลา GPS · หยิบเงินสด · เก็บเงินสด · สลิป — คุยกับ Apps Script ผ่าน JSON API |
 | `docs/admin.html` | แอป Dashboard ทิพย์/ปิ๊ก (PWA เพิ่มไอคอนหน้าจอได้) |
 | `docs/config.js` | LIFF ID + URL ของ Apps Script (ค่าสาธารณะ) |
 | `docs/คู่มือ*.md` | คู่มือ ช่าง / ปิ๊ก / ทิพย์ |

@@ -148,7 +148,7 @@ function doPost(e) {
   if (body.events) { try { webhook(body); } catch (err) {} return ContentService.createTextOutput('ok'); }
   return apiJson(body);
 }
-/** JSON API สำหรับแอป Dashboard (github.io) — ทุกคำสั่งต้องมี adt (token เครื่อง) ยกเว้น adt/adtcheck */
+/** JSON API: แอป Dashboard (adt/adtcheck/คำสั่งออฟฟิศ ต้องมี adt) และหน้าช่างบน github.io (session = แลก ID token เป็น session · staff = เรียกฟังก์ชันใน Staff.gs) */
 function apiJson(p) {
   let out;
   try {
@@ -156,6 +156,16 @@ function apiJson(p) {
       const v = verifyLineIdToken(p.idt);
       if (!v.ok) out = { ok: false, msg: v.msg };
       else { const a = admins()[v.uid]; if (!a) out = { ok: false, msg: 'บัญชี LINE นี้ยังไม่ได้ผูกเป็นแอดมิน — พิมพ์ "ผูกแอดมิน <Admin PIN>" หรือ "ผูกผู้จัดการ <Admin PIN>" ในแชท OA ก่อน' }; else { out = { ok: true, adt: adtIssue(v.uid, p.lb), name: a.name, role: a.role }; linePush(v.uid, '🔐 จดจำเครื่องใหม่สำหรับแอป Barber Back Office แล้ว (' + clean(p.lb, 40) + ') ใช้ได้ ' + ADT_DAYS + ' วัน\nถ้าไม่ใช่คุณ พิมพ์ "ล้างเครื่อง"'); } }
+    } else if (p.api === 'session') {
+      const v = verifyLineIdToken(p.idt);
+      if (!v.ok) out = { ok: false, msg: v.msg };
+      else { const tok = newSession(v.uid, v.name); out = { ok: true, tok, name: clean(v.name, 40), who: whoAmI(tok) }; }
+    } else if (p.api === 'staff') {
+      const fns = { whoAmI, bindLine, sendManualMe, punch, cashTake, cashCollect, mySummary, mySlipPdf };
+      const fn = fns[String(p.fn || '')]; const args = Array.isArray(p.args) ? p.args : [];
+      if (!fn) out = { ok: false, msg: 'ไม่รู้จักคำสั่ง' };
+      else if (!session(args[0])) out = { ok: false, msg: 'หมดเวลา กรุณาปิดแล้วกดเมนูในไลน์ใหม่' };
+      else out = fn.apply(null, args);
     } else if (p.api === 'adtcheck') { const a = adminFromAdt(p.adt); out = a ? { ok: true, name: a.name, role: a.role } : { ok: false }; }
     else { const a = adminFromAdt(p.adt); if (!a) out = { ok: false, expired: true, msg: 'หมดอายุ กรุณาล็อกอิน LINE ใหม่' }; else out = officeApi(a, p); }
   } catch (err) { out = { ok: false, msg: String(err && err.message || err) }; }
