@@ -87,7 +87,7 @@ function dailySave(a, p) {
       const name = clean(r.name, 30); if (!name) return;
       const heads = r.heads === '' ? '' : num(r.heads), sales = r.sales === '' ? '' : num(r.sales), cash = r.cash === '' ? '' : num(r.cash), tr = r.transfer === '' ? '' : num(r.transfer), over = r.over === '' || r.over == null ? '' : num(r.over);
       const cur = ex.find(e => e.name === name);
-      if (heads === '' && sales === '') { if (cur && r.remove) { s.getRange(cur.row, 1, 1, D_BY).clearContent(); deleted++; } return; }
+      if (heads === '' && sales === '') { if (cur && r.remove) { [[1, 7], [D_OVER, 1], [D_NOTE, 1], [D_BY, 1]].forEach(([c, w]) => s.getRange(cur.row, c, 1, w).clearContent()); deleted++; } return; } // ไม่แตะคอลัมน์สูตร (H J L N O P)
       const vals = [[day, shop, name, heads, sales, cash, tr]]; const row = cur ? cur.row : s.getLastRow() + 1;
       s.getRange(row, 1, 1, 7).setValues(vals); s.getRange(row, D_OVER).setValue(over); s.getRange(row, D_NOTE).setValue(clean(r.note, 120)); s.getRange(row, D_BY).setValue(a.name); s.getRange(row, D_DATE).setNumberFormat('yyyy-mm-dd'); n++;
     });
