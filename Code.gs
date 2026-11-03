@@ -80,6 +80,7 @@ function targets(ymStr) {
 function setTarget(ymStr, shop, val) {
   const s = sh(SH_SET); const rows = s.getRange('A33:D57').getValues(); const head = rows[0].map(v => String(v).trim()); const c = head.indexOf(shop); if (c < 1) return false;
   for (let i = 1; i < rows.length; i++) if (dateKey(rows[i][0]).slice(0, 7) === ymStr) { s.getRange(33 + i, 1 + c).setValue(num(val)); return true; }
+  for (let i = 1; i < rows.length; i++) if (!rows[i][0]) { s.getRange(33 + i, 1).setValue(ymStr + '-01'); s.getRange(33 + i, 1 + c).setValue(num(val)); return true; } // เดือนยังไม่มีในตาราง → เพิ่มแถวว่างแรก
   return false;
 }
 

@@ -123,12 +123,16 @@ let M_YM=TODAY.slice(0,7);
 async function pMonth(el){ const d=await api({api:'month',ym:M_YM}); if(!d.ok) throw new Error(d.msg);
   let h='<div class="card"><div class="row"><h2>📊 รายเดือน</h2>'+monthSel('mYm',M_YM,'M_YM=this.value;go(\'month\',true)')+'</div>';
   h+='<div class="tiles"><div class="tile"><small>ยอดขาย</small><b>'+n(d.total.sales)+'</b></div><div class="tile"><small>ค่าแรง+รายจ่าย</small><b>'+n(d.total.wage+d.total.exp)+'</b></div><div class="tile"><small>กำไร</small><b style="color:'+(d.total.profit>=0?'var(--ok)':'var(--err)')+'">'+n(d.total.profit)+'</b></div></div></div>';
-  h+='<div class="card"><h2>ต่อร้าน</h2><div class="scroll"><table><tr><th>ร้าน</th><th>หัว/เป้า</th><th>ยอดขาย</th><th>ค่าแรง</th><th>รายจ่าย</th><th>กำไร</th></tr>'+d.byShop.map(s=>'<tr><td>'+s.shop+(ME.role==='owner'?' <a href="#" onclick="setTarget(\''+s.shop+'\','+s.target+');return false" style="font-size:11px">ตั้งเป้า</a>':'')+'</td><td>'+s.heads+(s.target?' / '+s.target+(s.heads>=s.target?' ✓':''):'')+'</td><td>'+n(s.sales)+'</td><td>'+n(s.wage)+'</td><td>'+n(s.expTotal)+'</td><td><b>'+n(s.profit)+'</b></td></tr>').join('')+'</table></div>';
+  h+='<div class="card"><h2>ต่อร้าน</h2><div class="scroll"><table><tr><th>ร้าน</th><th>หัว/เป้า</th><th>ยอดขาย</th><th>ค่าแรง</th><th>รายจ่าย</th><th>กำไร</th></tr>'+d.byShop.map(s=>'<tr><td>'+s.shop+(ME.role==='owner'?' <a href="#" onclick="setTarget(\''+s.shop+'\','+(s.target||0)+');return false" style="font-size:11px">'+(s.target?'แก้เป้า':'ตั้งเป้า')+'</a>':'')+'</td><td>'+s.heads+' / '+(s.target?'<b>'+s.target+'</b>'+(s.heads>=s.target?' ✓':''):'<span class="mute">ยังไม่ตั้ง</span>')+'</td><td>'+n(s.sales)+'</td><td>'+n(s.wage)+'</td><td>'+n(s.expTotal)+'</td><td><b>'+n(s.profit)+'</b></td></tr>').join('')+'</table></div>';
   h+='<div class="mute" style="margin-top:6px">รายจ่าย: '+d.byShop.map(s=>s.shop+' → '+Object.keys(s.expenses).map(k=>k+' '+n(s.expenses[k])).join(', ')).join(' | ')+'</div></div>';
   h+='<div class="card"><h2>ช่าง</h2><div class="scroll"><table><tr><th>ช่าง</th><th>วัน</th><th>หัว</th><th>ยอด</th><th>ค่าแรง</th><th>สาย</th></tr>'+d.barbers.sort((a,b)=>b.wage-a.wage).map(b=>'<tr><td>'+b.name+'</td><td>'+b.days+'</td><td>'+b.heads+'</td><td>'+n(b.sales)+'</td><td>'+n(b.wage)+'</td><td>'+(b.late?b.late+' ('+b.lateMin+'น.)':'-')+'</td></tr>').join('')+'</table></div></div>';
   h+='<div class="card"><h2>รายวัน (หัว / ยอด)</h2><div class="scroll"><table><tr><th>วันที่</th>'+INIT.shops.map(s=>'<th>'+s+'</th>').join('')+'<th>รวม</th></tr>'+d.days.map(r=>{let t=0,tsales=0;const cells=INIT.shops.map(s=>{const x=r[s]||{heads:0,sales:0};t+=x.heads;tsales+=x.sales;return '<td>'+(x.heads?x.heads+' / '+n(x.sales):'-')+'</td>';}).join('');return '<tr><td>'+r.d.slice(5)+'</td>'+cells+'<td><b>'+t+'</b> / '+n(tsales)+'</td></tr>';}).join('')+'</table></div></div>';
   el.innerHTML=h; }
-async function setTarget(shop,cur){ const v=prompt('เป้าหัว '+shop+' เดือน '+M_YM,cur||''); if(v==null) return; const r=await api({api:'target_set',ym:M_YM,shop,val:v}); msg('gmsg',r.msg,r.ok?'ok':'err'); go('month',true); }
+async function setTarget(shop,cur){
+  if(cur&&!confirm('เป้า '+shop+' เดือน '+M_YM+' ตั้งไว้แล้ว '+cur+' หัว\nต้องการเปลี่ยนใช่ไหม?')) return;
+  const v=prompt((cur?'แก้เป้าหัว ':'ตั้งเป้าหัว ')+shop+' เดือน '+M_YM,cur||''); if(v==null||v==='') return;
+  if(!/^\d+$/.test(v.trim())){ alert('ใส่ตัวเลขจำนวนหัว'); return; }
+  const r=await api({api:'target_set',ym:M_YM,shop,val:v.trim()}); msg('gmsg',r.msg,r.ok?'ok':'err'); if(r.ok){ $('pg_today').dataset.loaded=''; $('pg_pay').dataset.loaded=''; go('month',true); } }
 
 /* ---------- เงินเดือน ---------- */
 let P_YM=(()=>{const d=new Date();d.setDate(0);return todayStr(d);})().slice(0,7);

@@ -13,7 +13,7 @@ function officeApi(a, p) {
     case 'pond': return pondData();
     case 'pond_paid': return pondPaid(a, p);
     case 'payroll': return payrollData(p.ym);
-    case 'target_set': if (!owner) return deny(); return { ok: setTarget(p.ym, p.shop, p.val), msg: 'ตั้งเป้า ' + p.shop + ' ' + p.ym + ' = ' + p.val };
+    case 'target_set': { if (!owner) return deny(); if (!(num(p.val) > 0)) return { ok: false, msg: 'ใส่จำนวนหัวเป็นตัวเลข' }; const ok = setTarget(p.ym, p.shop, p.val); return ok ? { ok: true, msg: 'ตั้งเป้า ' + p.shop + ' ' + p.ym + ' = ' + num(p.val) + ' หัว' } : { ok: false, msg: 'ไม่พบเดือน ' + p.ym + ' หรือร้าน ' + p.shop + ' ในแผ่น ตั้งค่า (A33:D57)' }; }
     case 'close_month': if (!owner) return deny(); return closeMonth(p.ym);
     case 'paid': if (!owner) return deny(); return confirmPaid(p.ym, p.slips || {});
     case 'barber_save': if (!owner) return deny(); return barberSave(p);
