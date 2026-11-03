@@ -65,7 +65,8 @@
   </div>
 
   <!-- หยิบเงินสด -->
-  <div class="modal" id="cashBox"><div class="card">
+  <div class="modal" id="dlg" style="align-items:center"><div class="card" style="width:92%;max-width:360px;border-radius:16px;margin:0"><h2 id="dlgT"></h2><div id="dlgM" style="white-space:pre-line"></div><div class="row" style="margin-top:12px"><button class="btn sec" id="dlgNo" onclick="dlgEnd(false)">ยกเลิก</button><button class="btn" onclick="dlgEnd(true)">ยืนยัน</button></div></div></div>
+<div class="modal" id="cashBox"><div class="card">
     <button class="x" onclick="close('cashBox')">×</button><h2>💵 หยิบเงินสดในร้าน</h2>
     <label>ร้าน</label><select id="cShop"></select>
     <label>เหตุผล</label><select id="cReason" onchange="cashReason()"></select>
@@ -100,6 +101,8 @@
   function tick(){ const n=new Date(); $('clock').textContent=n.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}); $('date').textContent=n.toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); } tick(); setInterval(tick,10000);
   function show(id,t,c){ const m=$(id); m.textContent=t; m.className='msg '+c; m.style.display='block'; }
   function open(id){ $(id).style.display='flex'; } function close(id){ $(id).style.display='none'; }
+  let _dlg=null; function ask(text,title,noCancel){ return new Promise(res=>{ _dlg=res; $('dlgT').textContent=title||'ยืนยัน'; $('dlgM').textContent=text||''; $('dlgNo').style.display=noCancel?'none':'block'; $('dlg').style.display='flex'; }); }
+  function dlgEnd(ok){ $('dlg').style.display='none'; const r=_dlg; _dlg=null; if(r) r(!!ok); }
   async function post(body){ const r=await fetch(BBO.GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)}); return r.json(); }
   function run(fn,...args){ return post({api:'staff',fn,args}); }
   async function start(){
@@ -134,7 +137,7 @@
   function getGPS(){ if(!navigator.geolocation){$('gps').textContent='อุปกรณ์ไม่รองรับ GPS';return;} navigator.geolocation.getCurrentPosition(p=>{pos={lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)};$('gps').textContent='GPS พร้อม (±'+pos.acc+' ม.)';},e=>{pos=null;$('gps').textContent='ไม่ได้ตำแหน่ง GPS — เปิด Location ให้ LINE แล้วลองใหม่';},{enableHighAccuracy:true,timeout:15000,maximumAge:30000}); }
   async function punch(a,force){ $('inBtn').disabled=$('outBtn').disabled=true; show('msg','กำลังบันทึก…','warn');
     try{ const r=await run('punch',TOK,a,{shop:sel.shop,shift:sel.shift,lat:pos&&pos.lat,lng:pos&&pos.lng,acc:pos&&pos.acc,force:!!force});
-      if(!r.ok){ show('msg',r.msg,r.far?'warn':'err'); if(r.far&&confirm(r.msg+'\n\nยืนยันว่าอยู่ที่ร้าน?')) return punch(a,true); renderToday(WHO.today); return; }
+      if(!r.ok){ show('msg',r.msg,r.far?'warn':'err'); if(r.far&&await ask(r.msg+'\n\nยืนยันว่าอยู่ที่ร้าน?','อยู่นอกพื้นที่ร้าน')) return punch(a,true); renderToday(WHO.today); return; }
       WHO.today=r.today; renderToday(r.today); show('msg',r.msg,r.late>0?'warn':'ok'); }
     catch(e){ show('msg','เชื่อมต่อไม่ได้: '+e.message,'err'); renderToday(WHO.today); } }
 
@@ -152,7 +155,7 @@
     if(r.slip) h+='<div class="status">'+r.slip.join('<br>')+'</div>'; else h+='<div class="mute">เดือนนี้ยังไม่ปิดงวด</div>';
     h+='<table><tr><th>วันที่</th><th>ร้าน</th><th>หัว</th><th>ยอด</th><th>ค่าแรง</th></tr>'+r.days.slice().reverse().map(x=>'<tr><td>'+x.d.slice(5)+'</td><td>'+x.shop+'</td><td>'+x.heads+'</td><td>'+x.sales.toLocaleString()+'</td><td>'+x.wage.toLocaleString()+'</td></tr>').join('')+'</table>';
     $('sBody').innerHTML=h; if(r.paid) $('sPdf').classList.remove('hide'); }catch(e){$('sBody').textContent='เชื่อมต่อไม่ได้';} }
-  async function openPdf(){ $('sPdf').disabled=true; try{ const r=await run('mySlipPdf',TOK,$('sYm').value); if(!r.ok){alert(r.msg);return;} const b=Uint8Array.from(atob(r.b64),c=>c.charCodeAt(0)); const url=URL.createObjectURL(new Blob([b],{type:'application/pdf'})); const a=document.createElement('a'); a.href=url; a.download=r.name; a.target='_blank'; document.body.appendChild(a); a.click(); }finally{$('sPdf').disabled=false;} }
+  async function openPdf(){ $('sPdf').disabled=true; try{ const r=await run('mySlipPdf',TOK,$('sYm').value); if(!r.ok){await ask(r.msg,'แจ้งเตือน',true);return;} const b=Uint8Array.from(atob(r.b64),c=>c.charCodeAt(0)); const url=URL.createObjectURL(new Blob([b],{type:'application/pdf'})); const a=document.createElement('a'); a.href=url; a.download=r.name; a.target='_blank'; document.body.appendChild(a); a.click(); }finally{$('sPdf').disabled=false;} }
   start();
 </script>
 </body></html>
