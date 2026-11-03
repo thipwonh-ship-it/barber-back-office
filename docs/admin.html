@@ -58,7 +58,7 @@ async function boot(){
   $('loginBox').classList.add('hide'); $('loading').classList.remove('hide');
   if(!ADT){ try{ await liff.init({liffId:BBO.LIFF_ID}); if(liff.isLoggedIn()) return lineLogin(); }catch(e){} showLogin(''); return; }
   try{ INIT=await api({api:'init'}); }catch(e){ return; }
-  if(!INIT.ok){ showLogin(INIT.msg||''); return; } ME=INIT.me; $('me').textContent=ME.name+(ME.role==='owner'?' (เจ้าของ)':' (ออฟฟิศ)'); $('loading').classList.add('hide'); go(location.hash.slice(1)||'today');
+  if(!INIT.ok){ showLogin(INIT.msg||''); return; } ME=INIT.me; $('me').textContent=ME.name+(ME.role==='owner'?' (เจ้าของ)':' (ผู้จัดการ)'); $('loading').classList.add('hide'); go(location.hash.slice(1)||'today');
 }
 function reload(){ go(PAGE,true); }
 function go(p,force){ if(!INIT) return; PAGE=p; location.hash=p; document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.p===p)); document.querySelectorAll('.pg').forEach(e=>e.classList.add('hide')); const el=$('pg_'+p); el.classList.remove('hide'); if(force||!el.dataset.loaded){ el.innerHTML='<div class="card mute">กำลังโหลด…</div>'; ({today:pToday,daily:pDaily,exp:pExp,pond:pPond,month:pMonth,pay:pPay})[p](el).then(()=>el.dataset.loaded=1).catch(e=>{ if(e.message!=='expired') el.innerHTML='<div class="card msg err" style="display:block">โหลดไม่ได้: '+esc(e.message)+'</div>'; }); } }
