@@ -20,7 +20,7 @@ function officeApi(a, p) {
     default: return { ok: false, msg: 'unknown api ' + p.api };
   }
 }
-function deny() { return { ok: false, msg: 'เฉพาะทิพย์เท่านั้น' }; }
+function deny() { return { ok: false, msg: 'เฉพาะแอดมินเท่านั้น' }; }
 function list(k) { return (prop(k) || '').split(',').filter(Boolean); }
 function addList(k, v) { const l = list(k); if (!l.includes(v)) l.push(v); P().setProperty(k, l.join(',')); }
 function monthList() { const out = []; const d = todayBkk(); for (let i = 0; i < 14; i++) { out.push(ym(d)); d.setMonth(d.getMonth() - 1); } return out; }

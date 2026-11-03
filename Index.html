@@ -5,22 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Barber Back Office</title>
 <style>
-  :root{--bg:#f4f5f7;--card:#fff;--ink:#1b1b1f;--mute:#6b7280;--line:#e5e7eb;--pri:#1f3864;--ok:#16a34a;--warn:#d97706;--err:#dc2626;--yellow:#fff2cc}
+  :root{--bg:#0f0f11;--card:#1c1c20;--ink:#f3f3f5;--mute:#9a9aa3;--line:#2e2e34;--pri:#f3f3f5;--pri-ink:#0f0f11;--ok:#d4d4d8;--warn:#a3a3ab;--err:#e5484d;--yellow:#26262b}
   *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"Segoe UI",Sarabun,Roboto,sans-serif}
   .wrap{max-width:480px;margin:0 auto;padding:16px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
   h1{font-size:18px;margin:0 0 4px} h2{font-size:16px;margin:0 0 10px} .mute{color:var(--mute);font-size:13px}
   .clock{font-size:36px;font-weight:700;text-align:center;letter-spacing:1px} .date{text-align:center;color:var(--mute);margin-bottom:8px}
-  .btn{display:block;width:100%;border:0;border-radius:12px;padding:16px;font-size:18px;font-weight:700;color:#fff;background:var(--pri);margin-top:10px;cursor:pointer}
-  .btn.ok{background:var(--ok)} .btn.warn{background:var(--warn)} .btn.sec{background:#fff;color:var(--pri);border:2px solid var(--pri)} .btn:disabled{opacity:.5}
+  .btn{display:block;width:100%;border:0;border-radius:12px;padding:16px;font-size:18px;font-weight:700;color:var(--pri-ink);background:var(--pri);margin-top:10px;cursor:pointer}
+  .btn.ok{background:var(--ok)} .btn.warn{background:var(--warn)} .btn.sec{background:transparent;color:var(--pri);border:2px solid var(--pri)} .btn:disabled{opacity:.5}
   .row{display:flex;gap:8px} .row>*{flex:1}
-  .seg{display:flex;gap:6px;margin:8px 0} .seg button{flex:1;border:2px solid var(--line);background:#fff;border-radius:10px;padding:10px 4px;font-size:15px;font-weight:600;cursor:pointer} .seg button.on{border-color:var(--pri);background:#e8edf7;color:var(--pri)}
-  input,select,textarea{width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:12px;font-size:16px;margin-top:4px;background:#fff} label{font-size:13px;color:var(--mute);display:block;margin-top:10px}
-  .msg{border-radius:10px;padding:10px 12px;margin-top:10px;font-size:14px;display:none} .msg.ok{background:#dcfce7;color:#166534} .msg.err{background:#fee2e2;color:#991b1b} .msg.warn{background:#fef3c7;color:#92400e}
+  .seg{display:flex;gap:6px;margin:8px 0} .seg button{flex:1;border:2px solid var(--line);background:#141417;color:var(--ink);border-radius:10px;padding:10px 4px;font-size:15px;font-weight:600;cursor:pointer} .seg button.on{border-color:var(--pri);background:var(--pri);color:var(--pri-ink)}
+  input,select,textarea{width:100%;border:1px solid #3a3a41;border-radius:10px;padding:12px;font-size:16px;margin-top:4px;background:#141417;color:var(--ink)} label{font-size:13px;color:var(--mute);display:block;margin-top:10px}
+  .msg{border-radius:10px;padding:10px 12px;margin-top:10px;font-size:14px;display:none} .msg.ok{background:#2a2a30;color:#e5e5ea;border:1px solid #4a4a52} .msg.err{background:#3a1d1f;color:#ffb3b6} .msg.warn{background:#2a2a30;color:#d4d4d8}
   .hide{display:none} .status{background:var(--yellow);border-radius:10px;padding:10px;font-size:14px;margin-top:8px}
-  .menu{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px} .menu button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:14px 6px;font-size:15px;font-weight:600;cursor:pointer}
+  .menu{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px} .menu button{border:1px solid var(--line);background:#141417;color:var(--ink);border-radius:12px;padding:14px 6px;font-size:15px;font-weight:600;cursor:pointer}
   table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:right} td:first-child,th:first-child{text-align:left}
-  .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;justify-content:center;z-index:9} .modal .card{width:100%;max-width:480px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto;margin:0}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9} .modal .card{width:100%;max-width:480px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto;margin:0}
   .x{float:right;background:none;border:0;font-size:22px;color:var(--mute)}
 </style>
 </head>
@@ -35,7 +35,7 @@
 
   <div id="bindBox" class="card hide">
     <h2>ผูกบัญชี LINE ครั้งแรก</h2>
-    <div class="mute">ใส่ PIN ที่ได้จากทิพย์ (ทำครั้งเดียว)</div>
+    <div class="mute">ใส่ PIN ที่ได้จากแอดมิน (ทำครั้งเดียว)</div>
     <input id="pin" inputmode="numeric" placeholder="PIN">
     <button class="btn" onclick="bind()">ยืนยัน</button>
     <div id="bindMsg" class="msg"></div>

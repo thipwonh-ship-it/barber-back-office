@@ -16,7 +16,7 @@ function manualBarber() {
 }
 function manualOffice() {
   return [
-    '📖 คู่มือปิ๊ก — แอป Dashboard',
+    '📖 คู่มือผู้จัดการ (ปิ๊ก) — แอป Dashboard',
     'เปิดแอป: ' + appUrl() + ' → ล็อกอิน LINE ครั้งเดียว → "เพิ่มไปยังหน้าจอโฮม" จะได้ไอคอนบนมือถือ',
     '',
     '• วันนี้: ใครเข้างาน/สาย · หัว/ยอดวันนี้ต่อร้าน · เงินสดคงเหลือควรมี · ปอนค้างโอน',
@@ -53,6 +53,6 @@ function manualOwner() {
 }
 function sendManual(uid, replyToken) {
   const role = adminRole(uid); const b = barberByUid(uid);
-  const txt = role === 'owner' ? manualOwner() : role === 'office' ? manualOffice() : b ? manualBarber() : 'ยังไม่ได้ผูกบัญชี — ช่าง: กดเมนู "ลงเวลา" แล้วใส่ PIN · ทิพย์/ปิ๊ก: พิมพ์ "ผูกแอดมิน <Admin PIN>" หรือ "ผูกปิ๊ก <Admin PIN>"';
+  const txt = role === 'owner' ? manualOwner() : role === 'office' ? manualOffice() : b ? manualBarber() : 'ยังไม่ได้ผูกบัญชี — ช่าง: กดเมนู "ลงเวลา" แล้วใส่ PIN · ทิพย์/ปิ๊ก: พิมพ์ "ผูกแอดมิน <Admin PIN>" หรือ "ผูกผู้จัดการ <Admin PIN>"';
   return replyToken ? lineReply(replyToken, txt) : linePush(uid, txt);
 }
