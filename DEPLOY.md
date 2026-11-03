@@ -30,8 +30,10 @@
    - Webhook URL = Web app URL (`/exec`) → Verify → **Use webhook: On**
    - Auto-reply messages: ปิด (ไปที่ LINE Official Account Manager → Response settings → ปิด Auto-response)
 
-## 4. Rich menu (LINE Official Account Manager → Rich menus → Create)
-ขนาด Large · 4 ช่อง · แต่ละช่องเป็น Link:
+## 4. Rich menu
+วิธีง่าย: ใน Apps Script เลือกฟังก์ชัน **`setupRichMenu`** → Run (ต้องใส่ `LINE_TOKEN` และเปิด GitHub Pages ก่อน) — ระบบสร้างเมนู 4 ปุ่มจากรูป `docs/richmenu.png` ให้เอง
+
+วิธีทำเอง (LINE Official Account Manager → Rich menus → Create): ขนาด Large · 4 ช่อง · แต่ละช่องเป็น Link:
 | ช่อง | ข้อความ | ลิงก์ |
 |---|---|---|
 | 1 | ⏰ ลงเวลา | `https://liff.line.me/2012346628-T0nYneoW` |

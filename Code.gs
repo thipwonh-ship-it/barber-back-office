@@ -224,3 +224,22 @@ function saveImage(dataUrl, sub, fileName, share) {
 }
 /** ทดสอบส่ง LINE หาแอดมินทุกคน */
 function testLine() { pushAdmins('ทดสอบระบบ Barber Back Office ' + nowText()); return 'ส่งแล้ว (ถ้าไม่ได้รับ: เช็ค LINE_TOKEN และผูกแอดมินก่อน)'; }
+
+/* ---------- Rich menu (รัน 1 ครั้งหลังใส่ LINE_TOKEN) ---------- */
+/** สร้าง Rich menu 4 ปุ่ม (ลงเวลา / หยิบเงินสด / เก็บเงินสด / สลิป) และตั้งเป็นเมนูหลักของ OA — รูปจาก docs/richmenu.png บน GitHub Pages */
+function setupRichMenu() {
+  const tok = lineToken(); if (!tok) return 'ยังไม่ได้ตั้ง LINE_TOKEN';
+  const liff = 'https://liff.line.me/' + LIFF_ID();
+  const hdr = { Authorization: 'Bearer ' + tok };
+  const W = 2500, H = 843, cw = W / 4;
+  const areas = ['', '?mode=cash', '?mode=collect', '?mode=slip'].map((q, i) => ({ bounds: { x: i * cw, y: 0, width: cw, height: H }, action: { type: 'uri', label: ['ลงเวลา', 'หยิบเงินสด', 'เก็บเงินสด', 'สลิป'][i], uri: liff + q } }));
+  const body = { size: { width: W, height: H }, selected: true, name: 'Barber Back Office', chatBarText: 'เมนู', areas };
+  const r1 = UrlFetchApp.fetch('https://api.line.me/v2/bot/richmenu', { method: 'post', contentType: 'application/json', headers: hdr, payload: JSON.stringify(body), muteHttpExceptions: true });
+  if (r1.getResponseCode() !== 200) return 'สร้างเมนูไม่สำเร็จ: ' + r1.getContentText();
+  const id = JSON.parse(r1.getContentText()).richMenuId;
+  const img = UrlFetchApp.fetch(appUrl().replace(/admin\.html$/, '') + 'richmenu.png').getBlob().setContentType('image/png');
+  const r2 = UrlFetchApp.fetch('https://api-data.line.me/v2/bot/richmenu/' + id + '/content', { method: 'post', contentType: 'image/png', headers: hdr, payload: img.getBytes(), muteHttpExceptions: true });
+  if (r2.getResponseCode() !== 200) return 'อัปโหลดรูปไม่สำเร็จ: ' + r2.getContentText();
+  const r3 = UrlFetchApp.fetch('https://api.line.me/v2/bot/user/all/richmenu/' + id, { method: 'post', headers: hdr, muteHttpExceptions: true });
+  return r3.getResponseCode() === 200 ? 'ตั้ง Rich menu แล้ว: ' + id : 'ตั้งเมนูหลักไม่สำเร็จ: ' + r3.getContentText();
+}
