@@ -227,12 +227,11 @@ function saveImage(dataUrl, sub, fileName, share) {
 function testLine() { pushAdmins('ทดสอบระบบ Barber Back Office ' + nowText()); return 'ส่งแล้ว (ถ้าไม่ได้รับ: เช็ค LINE_TOKEN และผูกแอดมินก่อน)'; }
 
 /* ---------- Rich menu (รัน 1 ครั้งหลังใส่ LINE_TOKEN) ---------- */
-/** สร้าง Rich menu 4 ปุ่ม (ลงเวลา / หยิบเงินสด / เก็บเงินสด / สลิป) และตั้งเป็นเมนูหลักของ OA — รูปจาก docs/richmenu.png บน GitHub Pages */
+/** สร้าง Rich menu 4 ปุ่ม (ลงเวลา / หยิบเงินสด / เก็บเงินสด / สลิป) ตั้งเป็นเมนูหลักของ OA — รูปจาก docs/richmenu.png บน GitHub Pages · รันซ้ำได้ (ลบเมนูเดิมแล้วสร้างใหม่) */
 function setupRichMenu() { const r = setupRichMenu_(); Logger.log(r); return r; }
 function setupRichMenu_() {
   const tok = lineToken(); if (!tok) return 'ยังไม่ได้ตั้ง LINE_TOKEN';
-  const cur = UrlFetchApp.fetch('https://api.line.me/v2/bot/user/all/richmenu', { headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true });
-  if (cur.getResponseCode() === 200) return 'มี Rich menu หลักอยู่แล้ว: ' + cur.getContentText() + ' (ถ้าต้องการสร้างใหม่ ให้ลบของเดิมก่อนด้วย deleteRichMenus)';
+  const removed = deleteRichMenus(); // สร้างใหม่ทับของเดิมเสมอ (รูป/ลิงก์ล่าสุด)
   const liff = 'https://liff.line.me/' + LIFF_ID();
   const hdr = { Authorization: 'Bearer ' + tok };
   const W = 2500, H = 843, cw = W / 4;
@@ -245,7 +244,7 @@ function setupRichMenu_() {
   const r2 = UrlFetchApp.fetch('https://api-data.line.me/v2/bot/richmenu/' + id + '/content', { method: 'post', contentType: 'image/png', headers: hdr, payload: img.getBytes(), muteHttpExceptions: true });
   if (r2.getResponseCode() !== 200) return 'อัปโหลดรูปไม่สำเร็จ: ' + r2.getContentText();
   const r3 = UrlFetchApp.fetch('https://api.line.me/v2/bot/user/all/richmenu/' + id, { method: 'post', headers: hdr, muteHttpExceptions: true });
-  return r3.getResponseCode() === 200 ? 'ตั้ง Rich menu แล้ว: ' + id : 'ตั้งเมนูหลักไม่สำเร็จ: ' + r3.getContentText();
+  return r3.getResponseCode() === 200 ? 'ตั้ง Rich menu แล้ว: ' + id + ' (ลบของเดิม ' + removed + ')' : 'ตั้งเมนูหลักไม่สำเร็จ: ' + r3.getContentText();
 }
 /** ลบ Rich menu ทั้งหมดของ OA (ใช้ก่อน setupRichMenu ใหม่) */
 function deleteRichMenus() {
