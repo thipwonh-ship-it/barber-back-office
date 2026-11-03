@@ -155,7 +155,7 @@ function apiJson(p) {
     if (p.api === 'adt') {
       const v = verifyLineIdToken(p.idt);
       if (!v.ok) out = { ok: false, msg: v.msg };
-      else { const a = admins()[v.uid]; if (!a) out = { ok: false, msg: 'บัญชี LINE นี้ยังไม่ได้ผูกเป็นแอดมิน — พิมพ์ "ผูกทิพย์ <Admin PIN>" หรือ "ผูกปิ๊ก <Admin PIN>" ในแชท OA ก่อน' }; else { out = { ok: true, adt: adtIssue(v.uid, p.lb), name: a.name, role: a.role }; linePush(v.uid, '🔐 จดจำเครื่องใหม่สำหรับแอป Barber Back Office แล้ว (' + clean(p.lb, 40) + ') ใช้ได้ ' + ADT_DAYS + ' วัน\nถ้าไม่ใช่คุณ พิมพ์ "ล้างเครื่อง"'); } }
+      else { const a = admins()[v.uid]; if (!a) out = { ok: false, msg: 'บัญชี LINE นี้ยังไม่ได้ผูกเป็นแอดมิน — พิมพ์ "ผูกแอดมิน <Admin PIN>" หรือ "ผูกปิ๊ก <Admin PIN>" ในแชท OA ก่อน' }; else { out = { ok: true, adt: adtIssue(v.uid, p.lb), name: a.name, role: a.role }; linePush(v.uid, '🔐 จดจำเครื่องใหม่สำหรับแอป Barber Back Office แล้ว (' + clean(p.lb, 40) + ') ใช้ได้ ' + ADT_DAYS + ' วัน\nถ้าไม่ใช่คุณ พิมพ์ "ล้างเครื่อง"'); } }
     } else if (p.api === 'adtcheck') { const a = adminFromAdt(p.adt); out = a ? { ok: true, name: a.name, role: a.role } : { ok: false }; }
     else { const a = adminFromAdt(p.adt); if (!a) out = { ok: false, expired: true, msg: 'หมดอายุ กรุณาล็อกอิน LINE ใหม่' }; else out = officeApi(a, p); }
   } catch (err) { out = { ok: false, msg: String(err && err.message || err) }; }
@@ -170,10 +170,11 @@ function webhook(body) {
     if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;
     const txt = String(ev.message.text).trim(), uid = src.userId, rt = ev.replyToken;
     let m;
-    if ((m = /^ผูก(ทิพย์|ปิ๊ก)\s*(\S+)$/.exec(txt))) {
+    if ((m = /^ผูก(แอดมิน|ทิพย์|ปิ๊ก)\s*(\S+)$/.exec(txt))) {
       if (m[2] !== adminPin() || !adminPin()) { lineReply(rt, '❌ Admin PIN ไม่ถูกต้อง'); return; }
-      const a = admins(); a[uid] = { name: m[1], role: m[1] === 'ทิพย์' ? 'owner' : 'office' }; P().setProperty('ADMINS', JSON.stringify(a));
-      lineReply(rt, '✅ ผูกบัญชี ' + m[1] + ' แล้ว\n• เปิดแอป Dashboard: ' + appUrl() + ' (ล็อกอิน LINE ครั้งเดียว แล้ว "เพิ่มไปยังหน้าจอโฮม")\n• พิมพ์ "คู่มือ" ดูวิธีใช้'); sendManual(uid); return;
+      const nm = m[1] === 'ปิ๊ก' ? 'ปิ๊ก' : 'แอดมิน';
+      const a = admins(); a[uid] = { name: nm, role: nm === 'แอดมิน' ? 'owner' : 'office' }; P().setProperty('ADMINS', JSON.stringify(a));
+      lineReply(rt, '✅ ผูกบัญชี ' + nm + ' แล้ว\n• เปิดแอป Dashboard: ' + appUrl() + ' (ล็อกอิน LINE ครั้งเดียว แล้ว "เพิ่มไปยังหน้าจอโฮม")\n• พิมพ์ "คู่มือ" ดูวิธีใช้'); sendManual(uid); return;
     }
     if (/^ล้างเครื่อง$/.test(txt) && adminRole(uid)) { const n = adtList().length; adtSave([]); lineReply(rt, '🔐 ยกเลิกการจดจำเครื่องแล้ว ' + n + ' เครื่อง — เปิดแอปครั้งต่อไปต้องล็อกอิน LINE ใหม่'); return; }
     if ((m = /^โอนแล้ว\s*(\d{4}-\d{2})?$/.exec(txt)) && adminRole(uid) === 'owner') { const r = confirmPaid(m[1] || prevMonth()); lineReply(rt, r.msg); return; }

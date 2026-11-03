@@ -32,7 +32,7 @@ function manualOffice() {
 }
 function manualOwner() {
   return [
-    '📖 คู่มือทิพย์ — Barber Back Office',
+    '📖 คู่มือแอดมิน (ทิพย์) — Barber Back Office',
     'แอป Dashboard: ' + appUrl() + ' (ทำได้ทุกอย่างที่ปิ๊กทำ + เมนูด้านล่าง)',
     '',
     '• ตั้งเป้าหัว: ต้นเดือน → แอป → รายเดือน → ตั้งเป้า (หรือกรอกในชีต ตั้งค่า!A34:D57)',
@@ -53,6 +53,6 @@ function manualOwner() {
 }
 function sendManual(uid, replyToken) {
   const role = adminRole(uid); const b = barberByUid(uid);
-  const txt = role === 'owner' ? manualOwner() : role === 'office' ? manualOffice() : b ? manualBarber() : 'ยังไม่ได้ผูกบัญชี — ช่าง: กดเมนู "ลงเวลา" แล้วใส่ PIN · ทิพย์/ปิ๊ก: พิมพ์ "ผูกทิพย์ <Admin PIN>" หรือ "ผูกปิ๊ก <Admin PIN>"';
+  const txt = role === 'owner' ? manualOwner() : role === 'office' ? manualOffice() : b ? manualBarber() : 'ยังไม่ได้ผูกบัญชี — ช่าง: กดเมนู "ลงเวลา" แล้วใส่ PIN · ทิพย์/ปิ๊ก: พิมพ์ "ผูกแอดมิน <Admin PIN>" หรือ "ผูกปิ๊ก <Admin PIN>"';
   return replyToken ? lineReply(replyToken, txt) : linePush(uid, txt);
 }

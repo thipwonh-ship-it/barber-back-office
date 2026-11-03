@@ -42,7 +42,7 @@
 | 4 | 🧾 สลิป | `https://liff.line.me/2012346628-T0nYneoW?mode=slip` |
 
 ## 5. เริ่มใช้งาน
-1. ทิพย์: เพิ่มเพื่อน OA @529vfxbd → พิมพ์ `ผูกทิพย์ <Admin PIN>` · ปิ๊ก: พิมพ์ `ผูกปิ๊ก <Admin PIN>`
+1. ทิพย์: เพิ่มเพื่อน OA @529vfxbd → พิมพ์ `ผูกแอดมิน <Admin PIN>` · ปิ๊ก: พิมพ์ `ผูกปิ๊ก <Admin PIN>`
 2. เปิด `https://thipwonh-ship-it.github.io/barber-back-office/admin.html` → ล็อกอิน LINE → Safari/Chrome: **แชร์ → เพิ่มไปยังหน้าจอโฮม** (ได้ไอคอน ✂️)
 3. ใส่ PIN ช่างในแผ่น ตั้งค่า คอลัมน์ F (Pond, M, Phoom, Leko, Bow) · บอก PIN ช่างแต่ละคน
 4. ช่าง: เพิ่มเพื่อน OA → กดเมนู "ลงเวลา" → ใส่ PIN ครั้งแรก → ใช้ได้เลย (คู่มือส่งเข้าไลน์อัตโนมัติ)
