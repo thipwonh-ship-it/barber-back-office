@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Barber Back Office</title>
+<style>body{margin:0;font:16px -apple-system,"Segoe UI",Sarabun,sans-serif;background:#f4f5f7;color:#1b1b1f;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:20px}.e{color:#991b1b;background:#fee2e2;padding:12px;border-radius:10px;margin-top:12px;font-size:14px}</style>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script src="config.js"></script></head>
+<body><div><div>✂️ กำลังเปิด Barber Back Office…</div><div id="e" class="e" style="display:none"></div></div>
+<script>
+// หน้าทางผ่าน LIFF (GAS รัน LIFF SDK ในเฟรมไม่ได้): ยืนยันตัวตนกับ LINE → ส่ง ID token ไปให้ Apps Script
+(async () => {
+  const err = m => { const e = document.getElementById('e'); e.textContent = m; e.style.display = 'block'; };
+  try {
+    const q = new URLSearchParams(location.search); const st = q.get('liff.state') || '';
+    const mode = q.get('mode') || (st.match(/mode=(\w+)/) || [])[1] || '';
+    await liff.init({ liffId: BBO.LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return; }
+    const idt = liff.getIDToken(); if (!idt) { err('ไม่ได้รับ ID token จาก LINE — ปิดแล้วกดเมนูใหม่'); return; }
+    if (!BBO.GAS_URL || /PASTE/.test(BBO.GAS_URL)) { err('ยังไม่ได้ตั้ง GAS_URL ใน config.js'); return; }
+    location.replace(BBO.GAS_URL + '?idt=' + encodeURIComponent(idt) + (mode ? '&mode=' + mode : ''));
+  } catch (e) { err('เปิดไม่ได้: ' + (e && e.message || e)); }
+})();
+</script></body></html>

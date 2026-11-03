@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barber Back Office</title>
+<style>
+  :root{--bg:#f4f5f7;--card:#fff;--ink:#1b1b1f;--mute:#6b7280;--line:#e5e7eb;--pri:#1f3864;--ok:#16a34a;--warn:#d97706;--err:#dc2626;--yellow:#fff2cc}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"Segoe UI",Sarabun,Roboto,sans-serif}
+  .wrap{max-width:480px;margin:0 auto;padding:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+  h1{font-size:18px;margin:0 0 4px} h2{font-size:16px;margin:0 0 10px} .mute{color:var(--mute);font-size:13px}
+  .clock{font-size:36px;font-weight:700;text-align:center;letter-spacing:1px} .date{text-align:center;color:var(--mute);margin-bottom:8px}
+  .btn{display:block;width:100%;border:0;border-radius:12px;padding:16px;font-size:18px;font-weight:700;color:#fff;background:var(--pri);margin-top:10px;cursor:pointer}
+  .btn.ok{background:var(--ok)} .btn.warn{background:var(--warn)} .btn.sec{background:#fff;color:var(--pri);border:2px solid var(--pri)} .btn:disabled{opacity:.5}
+  .row{display:flex;gap:8px} .row>*{flex:1}
+  .seg{display:flex;gap:6px;margin:8px 0} .seg button{flex:1;border:2px solid var(--line);background:#fff;border-radius:10px;padding:10px 4px;font-size:15px;font-weight:600;cursor:pointer} .seg button.on{border-color:var(--pri);background:#e8edf7;color:var(--pri)}
+  input,select,textarea{width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:12px;font-size:16px;margin-top:4px;background:#fff} label{font-size:13px;color:var(--mute);display:block;margin-top:10px}
+  .msg{border-radius:10px;padding:10px 12px;margin-top:10px;font-size:14px;display:none} .msg.ok{background:#dcfce7;color:#166534} .msg.err{background:#fee2e2;color:#991b1b} .msg.warn{background:#fef3c7;color:#92400e}
+  .hide{display:none} .status{background:var(--yellow);border-radius:10px;padding:10px;font-size:14px;margin-top:8px}
+  .menu{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px} .menu button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:14px 6px;font-size:15px;font-weight:600;cursor:pointer}
+  table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:right} td:first-child,th:first-child{text-align:left}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;justify-content:center;z-index:9} .modal .card{width:100%;max-width:480px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto;margin:0}
+  .x{float:right;background:none;border:0;font-size:22px;color:var(--mute)}
+</style>
+</head>
+<body><div class="wrap">
+  <div class="card">
+    <h1>✂️ Barber Back Office</h1>
+    <div class="clock" id="clock">--:--</div><div class="date" id="date"></div>
+    <div id="whoLine" class="mute"></div>
+  </div>
+
+  <div id="waitBox" class="card"><div class="mute">กำลังตรวจสอบบัญชี LINE…</div><div id="bootErr" class="msg err"></div></div>
+
+  <div id="bindBox" class="card hide">
+    <h2>ผูกบัญชี LINE ครั้งแรก</h2>
+    <div class="mute">ใส่ PIN ที่ได้จากทิพย์ (ทำครั้งเดียว)</div>
+    <input id="pin" inputmode="numeric" placeholder="PIN">
+    <button class="btn" onclick="bind()">ยืนยัน</button>
+    <div id="bindMsg" class="msg"></div>
+  </div>
+
+  <div id="mainBox" class="hide">
+    <div class="card" id="punchCard">
+      <h2>ลงเวลา</h2>
+      <div class="mute">ร้านที่ทำงานวันนี้</div>
+      <div class="seg" id="shopSeg"></div>
+      <div id="shiftWrap"><div class="mute">กะ</div><div class="seg" id="shiftSeg"><button data-v="10" onclick="pick('shift','10')">10:00–20:00</button><button data-v="11" onclick="pick('shift','11')">11:00–21:00</button></div></div>
+      <div id="gps" class="mute">กำลังหาตำแหน่ง GPS…</div>
+      <div class="row"><button class="btn ok" id="inBtn" onclick="punch('in')">เข้างาน</button><button class="btn warn" id="outBtn" onclick="punch('out')">เลิกงาน</button></div>
+      <div id="todayStatus" class="status hide"></div>
+      <div id="msg" class="msg"></div>
+    </div>
+    <div class="card">
+      <h2>เมนู</h2>
+      <div class="menu">
+        <button onclick="openCash()">💵 หยิบเงินสด</button>
+        <button onclick="openCollect()">🏦 เก็บเงินสด</button>
+        <button onclick="openSlip()">🧾 สลิป / สรุปของฉัน</button>
+        <button onclick="google.script.run.sendManualMe(TOK)">📖 คู่มือ (ส่งเข้าไลน์)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- หยิบเงินสด -->
+  <div class="modal" id="cashBox"><div class="card">
+    <button class="x" onclick="close('cashBox')">×</button><h2>💵 หยิบเงินสดในร้าน</h2>
+    <label>ร้าน</label><select id="cShop"></select>
+    <label>เหตุผล</label><select id="cReason" onchange="cashReason()"></select>
+    <label>จำนวนเงิน (บาท)</label><input id="cAmt" inputmode="numeric">
+    <label>รายละเอียด (ซื้ออะไร / ชื่อลูกค้า)</label><input id="cDetail" placeholder="เช่น น้ำดื่ม 1 แพ็ค">
+    <button class="btn" id="cBtn" onclick="sendCash()">บันทึก</button><div id="cMsg" class="msg"></div>
+  </div></div>
+
+  <!-- เก็บเงินสด -->
+  <div class="modal" id="colBox"><div class="card">
+    <button class="x" onclick="close('colBox')">×</button><h2>🏦 เก็บเงินสด</h2>
+    <label>ร้าน</label><select id="kShop"></select>
+    <label>จำนวนเงินสดที่เก็บ (บาท)</label><input id="kAmt" inputmode="numeric">
+    <label>วิธี</label><select id="kMethod" onchange="colMethod()"></select>
+    <div id="kWhoWrap"><label>ชื่อคนมาเก็บ</label><input id="kWho"></div>
+    <div id="kImgWrap" class="hide"><label>รูปสลิปโอน (จำเป็น)</label><input type="file" id="kImg" accept="image/*"></div>
+    <button class="btn" id="kBtn" onclick="sendCollect()">บันทึก</button><div id="kMsg" class="msg"></div>
+  </div></div>
+
+  <!-- สลิป -->
+  <div class="modal" id="slipBox"><div class="card">
+    <button class="x" onclick="close('slipBox')">×</button><h2>🧾 สรุปของฉัน</h2>
+    <select id="sYm" onchange="loadSlip()"></select>
+    <div id="sBody" class="mute" style="margin-top:8px">กำลังโหลด…</div>
+    <button class="btn sec hide" id="sPdf" onclick="openPdf()">เปิดสลิป PDF</button>
+  </div></div>
+</div>
+<script>
+  const $ = id => document.getElementById(id);
+  const TOK = '<?= tok ?>', MODE = '<?= mode ?>', LINE_ERR = '<?= err ?>';
+  let WHO = <?!= who ?>; let pos = null, sel = { shop: '', shift: '11' };
+  function tick(){ const n=new Date(); $('clock').textContent=n.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}); $('date').textContent=n.toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); } tick(); setInterval(tick,10000);
+  function show(id,t,c){ const m=$(id); m.textContent=t; m.className='msg '+c; m.style.display='block'; }
+  function open(id){ $(id).style.display='flex'; } function close(id){ $(id).style.display='none'; }
+  function run(fn,...args){ return new Promise((res,rej)=>google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args)); }
+
+  function boot(){
+    if(!TOK){ $('bootErr').textContent='เปิดหน้านี้จากเมนูในไลน์เท่านั้น'+(LINE_ERR?' ('+LINE_ERR+')':''); $('bootErr').style.display='block'; return; }
+    if(WHO && WHO.ok) ready(WHO); else if(WHO && WHO.needPin){ $('waitBox').classList.add('hide'); $('bindBox').classList.remove('hide'); }
+    else { $('bootErr').textContent='หมดเวลา กรุณาปิดแล้วกดเมนูในไลน์ใหม่'; $('bootErr').style.display='block'; }
+  }
+  async function bind(){ show('bindMsg','กำลังตรวจสอบ…','warn'); try{ const r=await run('bindLine',TOK,$('pin').value); if(!r.ok){show('bindMsg',r.msg,'err');return;} WHO=await run('whoAmI',TOK); $('bindBox').classList.add('hide'); ready(WHO); show('msg',r.msg,'ok'); }catch(e){show('bindMsg','เชื่อมต่อไม่ได้: '+e.message,'err');} }
+  function ready(w){
+    $('waitBox').classList.add('hide'); $('mainBox').classList.remove('hide'); $('whoLine').textContent='สวัสดี '+w.name+' (ร้านหลัก '+w.shop+')';
+    sel.shop = (w.today && w.today.shop) || w.shop; $('shopSeg').innerHTML = w.shops.map(s=>'<button data-v="'+s.name+'" onclick="pick(\'shop\',\''+s.name+'\')">'+s.name+'</button>').join('');
+    ['cShop','kShop'].forEach(id=>$(id).innerHTML=w.shops.map(s=>'<option'+(s.name===sel.shop?' selected':'')+'>'+s.name+'</option>').join(''));
+    $('cReason').innerHTML=w.reasons.map(r=>'<option>'+r+'</option>').join(''); cashReason();
+    $('kMethod').innerHTML=w.methods.map(r=>'<option>'+r+'</option>').join(''); $('kWho').value=w.collector; colMethod();
+    pick('shop',sel.shop); pick('shift',sel.shift); renderToday(w.today); getGPS();
+    if(MODE==='cash') setTimeout(openCash,300); if(MODE==='collect') setTimeout(openCollect,300); if(MODE==='slip') setTimeout(openSlip,300);
+  }
+  function pick(k,v){ sel[k]=v; const seg=k==='shop'?$('shopSeg'):$('shiftSeg'); [...seg.children].forEach(b=>b.classList.toggle('on',b.dataset.v===v)); if(k==='shop'){ const s=WHO.shops.find(x=>x.name===v); $('shiftWrap').classList.toggle('hide',!s||!s.open1||s.open1===s.open2); } }
+  function renderToday(t){ const el=$('todayStatus'); if(!t){el.classList.add('hide');return;} el.classList.remove('hide'); el.textContent='วันนี้: '+t.shop+' กะ '+t.shift+' · เข้า '+t.tin+(t.tout?' · ออก '+t.tout:'')+(t.late>0?' · สาย '+t.late+' นาที':' · ตรงเวลา'); $('inBtn').disabled=!!t.tin; $('outBtn').disabled=!t.tin||!!t.tout; }
+  function getGPS(){ if(!navigator.geolocation){$('gps').textContent='อุปกรณ์ไม่รองรับ GPS';return;} navigator.geolocation.getCurrentPosition(p=>{pos={lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)};$('gps').textContent='GPS พร้อม (±'+pos.acc+' ม.)';},e=>{pos=null;$('gps').textContent='ไม่ได้ตำแหน่ง GPS — เปิด Location ให้ LINE แล้วลองใหม่';},{enableHighAccuracy:true,timeout:15000,maximumAge:30000}); }
+  async function punch(a,force){ $('inBtn').disabled=$('outBtn').disabled=true; show('msg','กำลังบันทึก…','warn');
+    try{ const r=await run('punch',TOK,a,{shop:sel.shop,shift:sel.shift,lat:pos&&pos.lat,lng:pos&&pos.lng,acc:pos&&pos.acc,force:!!force});
+      if(!r.ok){ show('msg',r.msg,r.far?'warn':'err'); if(r.far&&confirm(r.msg+'\n\nยืนยันว่าอยู่ที่ร้าน?')) return punch(a,true); renderToday(WHO.today); return; }
+      WHO.today=r.today; renderToday(r.today); show('msg',r.msg,r.late>0?'warn':'ok'); }
+    catch(e){ show('msg','เชื่อมต่อไม่ได้: '+e.message,'err'); renderToday(WHO.today); } }
+
+  function openCash(){ $('cMsg').style.display='none'; $('cDetail').value=''; open('cashBox'); }
+  function cashReason(){ const m=/\((\d+)\)/.exec($('cReason').value); $('cAmt').value=m?m[1]:''; $('cAmt').readOnly=!!m; }
+  async function sendCash(){ $('cBtn').disabled=true; show('cMsg','กำลังบันทึก…','warn'); try{ const r=await run('cashTake',TOK,{shop:$('cShop').value,reason:$('cReason').value,amount:$('cAmt').value,detail:$('cDetail').value}); $('cBtn').disabled=false; show('cMsg',r.msg,r.ok?'ok':'err'); if(r.ok) setTimeout(()=>close('cashBox'),1500);}catch(e){$('cBtn').disabled=false;show('cMsg','เชื่อมต่อไม่ได้','err');} }
+  function openCollect(){ $('kMsg').style.display='none'; $('kAmt').value=''; open('colBox'); }
+  function colMethod(){ const bank=/ธนาคาร|โอน/.test($('kMethod').value); $('kWhoWrap').classList.toggle('hide',bank); $('kImgWrap').classList.toggle('hide',!bank); }
+  function shrink(file){ return new Promise((res,rej)=>{ const img=new Image(); const url=URL.createObjectURL(file); img.onload=()=>{ const max=1280; const s=Math.min(1,max/Math.max(img.width,img.height)); const c=document.createElement('canvas'); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg',.85)); }; img.onerror=rej; img.src=url; }); }
+  async function sendCollect(){ $('kBtn').disabled=true; show('kMsg','กำลังบันทึก…','warn'); try{ let image=''; const f=$('kImg').files[0]; if(f) image=await shrink(f);
+    const r=await run('cashCollect',TOK,{shop:$('kShop').value,amount:$('kAmt').value,method:$('kMethod').value,collector:$('kWho').value,image}); $('kBtn').disabled=false; show('kMsg',r.msg,r.ok?'ok':'err'); if(r.ok) setTimeout(()=>close('colBox'),1500);}catch(e){$('kBtn').disabled=false;show('kMsg','เชื่อมต่อไม่ได้','err');} }
+  function openSlip(){ const o=[]; const d=new Date(); for(let i=0;i<6;i++){ o.push(d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)); d.setMonth(d.getMonth()-1);} $('sYm').innerHTML=o.map(m=>'<option>'+m+'</option>').join(''); open('slipBox'); loadSlip(); }
+  async function loadSlip(){ $('sBody').textContent='กำลังโหลด…'; $('sPdf').classList.add('hide'); try{ const r=await run('mySummary',TOK,$('sYm').value); if(!r.ok){$('sBody').textContent=r.msg;return;}
+    let h='<div><b>'+r.heads+' หัว</b> · ยอด '+r.sales.toLocaleString()+' · ค่าแรง <b>'+r.wage.toLocaleString()+'</b> บาท · ทำงาน '+r.days.length+' วัน · สาย '+r.late+' ครั้ง</div>';
+    if(r.slip) h+='<div class="status">'+r.slip.join('<br>')+'</div>'; else h+='<div class="mute">เดือนนี้ยังไม่ปิดงวด</div>';
+    h+='<table><tr><th>วันที่</th><th>ร้าน</th><th>หัว</th><th>ยอด</th><th>ค่าแรง</th></tr>'+r.days.slice().reverse().map(x=>'<tr><td>'+x.d.slice(5)+'</td><td>'+x.shop+'</td><td>'+x.heads+'</td><td>'+x.sales.toLocaleString()+'</td><td>'+x.wage.toLocaleString()+'</td></tr>').join('')+'</table>';
+    $('sBody').innerHTML=h; if(r.paid) $('sPdf').classList.remove('hide'); }catch(e){$('sBody').textContent='เชื่อมต่อไม่ได้';} }
+  async function openPdf(){ $('sPdf').disabled=true; try{ const r=await run('mySlipPdf',TOK,$('sYm').value); if(!r.ok){alert(r.msg);return;} const b=Uint8Array.from(atob(r.b64),c=>c.charCodeAt(0)); const url=URL.createObjectURL(new Blob([b],{type:'application/pdf'})); const a=document.createElement('a'); a.href=url; a.download=r.name; a.target='_blank'; document.body.appendChild(a); a.click(); }finally{$('sPdf').disabled=false;} }
+  boot();
+</script>
+</body></html>
