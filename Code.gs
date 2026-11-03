@@ -243,3 +243,8 @@ function setupRichMenu() {
   const r3 = UrlFetchApp.fetch('https://api.line.me/v2/bot/user/all/richmenu/' + id, { method: 'post', headers: hdr, muteHttpExceptions: true });
   return r3.getResponseCode() === 200 ? 'ตั้ง Rich menu แล้ว: ' + id : 'ตั้งเมนูหลักไม่สำเร็จ: ' + r3.getContentText();
 }
+/** ตรวจว่า OA มี Rich menu หลักแล้วหรือยัง (ดูผลใน Execution log) */
+function checkRichMenu() {
+  const r = UrlFetchApp.fetch('https://api.line.me/v2/bot/user/all/richmenu', { headers: { Authorization: 'Bearer ' + lineToken() }, muteHttpExceptions: true });
+  Logger.log(r.getResponseCode() + ' ' + r.getContentText()); return r.getContentText();
+}
