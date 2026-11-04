@@ -47,7 +47,12 @@ function hm(d) { return Utilities.formatDate(d, TZ, 'HH:mm'); }
 function nowText() { return Utilities.formatDate(new Date(), TZ, 'HH:mm d MMM yyyy'); }
 function todayBkk() { const [y, m, d] = ymd(new Date()).split('-').map(Number); return new Date(y, m - 1, d); }
 function parseYmd(s) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '').trim()); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
-function dateKey(v) { if (v instanceof Date) return ymd(v); const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v || '')); return m ? m[1] : ''; }
+function dateKey(v) {
+  if (v instanceof Date) return ymd(v);
+  if (typeof v === 'number' && v > 20000 && v < 80000) return Utilities.formatDate(new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000), 'UTC', 'yyyy-MM-dd'); // serial date ของ Sheets
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v || '')); if (m) return m[1];
+  const d = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(v || '')); return d ? d[3] + '-' + ('0' + d[2]).slice(-2) + '-' + ('0' + d[1]).slice(-2) : '';
+}
 function num(v) { const n = Number(v); return isFinite(n) ? n : 0; }
 function money(v) { return num(v).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
 function clean(s, n) { return String(s || '').replace(/[\r\n\t]+/g, ' ').replace(/[<>]/g, '').trim().slice(0, n || 200); }
