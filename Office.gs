@@ -12,6 +12,7 @@ function officeApi(a, p) {
     case 'cash_list': return { ok: true, rows: cashRows(p.ym).reverse(), balance: cashBalance() };
     case 'pond': return pondData();
     case 'pond_paid': return pondPaid(a, p);
+    case 'pond_unpay': return pondUnpay(a, p);
     case 'payroll': return payrollData(p.ym);
     case 'target_set': { if (!owner) return deny(); if (!(num(p.val) > 0)) return { ok: false, msg: 'ใส่จำนวนหัวเป็นตัวเลข' }; const ok = setTarget(p.ym, p.shop, p.val); return ok ? { ok: true, msg: 'ตั้งเป้า ' + p.shop + ' ' + p.ym + ' = ' + num(p.val) + ' หัว' } : { ok: false, msg: 'ไม่พบเดือน ' + p.ym + ' หรือร้าน ' + p.shop + ' ในแผ่น ตั้งค่า (A33:D57)' }; }
     case 'close_month': if (!owner) return deny(); return closeMonth(p.ym);
@@ -122,6 +123,13 @@ function pondData() {
     out.today.push({ name: b.name, due: due.length, dueTotal: due.reduce((a, r) => a + r.wage, 0) });
   });
   return out;
+}
+/** ยกเลิกรายการ "โอนแล้ว" (กดผิด) — ลบแถวในแผ่น โอนรายวัน */
+function pondUnpay(a, p) {
+  const name = clean(p.name, 30), d = dateKey(p.date); const s = ss().getSheetByName(SH_DAILYPAY); if (!s || !name || !d) return { ok: false, msg: 'ไม่พบรายการ' };
+  const rows = s.getRange(2, 1, Math.max(s.getLastRow() - 1, 1), 3).getValues(); let n = 0;
+  for (let i = rows.length - 1; i >= 0; i--) if (String(rows[i][1]).trim() === name && dateKey(rows[i][2]) === d) { s.deleteRow(i + 2); n++; }
+  return { ok: true, msg: n ? 'ยกเลิกโอน ' + name + ' ' + d + ' แล้ว' : 'ไม่พบรายการ', data: pondData() };
 }
 function pondPaid(a, p) {
   const name = clean(p.name, 30); const dates = (p.dates || []).map(d => dateKey(d)).filter(Boolean); if (!name || !dates.length) return { ok: false, msg: 'เลือกวันที่' };
