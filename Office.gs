@@ -113,8 +113,10 @@ function expenseAdd(a, p) {
 function dailyPayRows() { const s = ss().getSheetByName(SH_DAILYPAY); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 7).getValues().map(r => ({ paidOn: dateKey(r[0]), name: String(r[1]).trim(), forDate: dateKey(r[2]), amt: num(r[3]), by: String(r[4] || ''), link: String(r[5] || '') })); }
 function pondData() {
   const dailyB = barbers(false).filter(b => b.daily); const paid = dailyPayRows(); const today = todayBkk(); const out = { ok: true, barbers: [], today: [] };
+  // เริ่มนับโอนรายวันตั้งแต่วันที่เริ่มใช้ระบบ (ตั้งค่า L28:L30 "ตั้งแต่วันที่") — ก่อนหน้านั้นจ่ายไปแล้วนอกระบบ
+  const starts = shops().map(x => x.cashFrom).filter(Boolean).sort(); const start = starts[0] || ym(today) + '-01';
   dailyB.forEach(b => {
-    const rows = dailyRows(r => r.name === b.name).slice(-45).reverse().map(r => { const pd = paid.find(x => x.name === b.name && x.forDate === r.d); return { d: r.d, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid, paid: !!pd, paidOn: pd ? pd.paidOn : '', link: pd ? pd.link : '' }; });
+    const rows = dailyRows(r => r.name === b.name && r.d >= start).slice(-45).reverse().map(r => { const pd = paid.find(x => x.name === b.name && x.forDate === r.d); return { d: r.d, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid, paid: !!pd, paidOn: pd ? pd.paidOn : '', link: pd ? pd.link : '' }; });
     const due = rows.filter(r => !r.paid && r.wage > 0 && r.d <= ymd(new Date(today.getTime() - 2 * 86400000)));
     out.barbers.push({ name: b.name, rows, due, dueTotal: due.reduce((a, r) => a + r.wage, 0) });
     out.today.push({ name: b.name, due: due.length, dueTotal: due.reduce((a, r) => a + r.wage, 0) });
