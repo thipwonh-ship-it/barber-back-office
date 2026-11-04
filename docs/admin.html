@@ -56,6 +56,7 @@ function showLogin(m){ $('loading').classList.add('hide'); $('loginBox').classLi
 async function lineLogin(){ try{ await liff.init({liffId:BBO.LIFF_ID}); if(!liff.isLoggedIn()){ liff.login({redirectUri:location.href.split('#')[0]}); return; } const idt=liff.getIDToken(); const r=await api({api:'adt',idt,lb:navigator.userAgent.slice(0,40)}); if(!r.ok){ msg('loginMsg',r.msg,'err'); try{liff.logout();}catch(e){} return; } ADT=r.adt; localStorage.setItem('bbo_adt',ADT); boot(); }catch(e){ msg('loginMsg','ล็อกอินไม่สำเร็จ: '+e.message,'err'); } }
 async function boot(){
   if(/PASTE/.test(GAS)){ showLogin('ยังไม่ได้ตั้ง GAS_URL ใน config.js'); return; }
+  if(/ Line\//i.test(navigator.userAgent)){ $('loading').classList.add('hide'); $('loginBox').classList.remove('hide'); $('loginBox').innerHTML='<div style="font-size:40px">✂️</div><h2>เปิดในเบราว์เซอร์ปกติ</h2><div class="mute">หน้านี้ใช้ในเบราว์เซอร์ของ LINE ไม่ได้ — กด ⋯ หรือ ↗ มุมขวาบน แล้วเลือก "เปิดในเบราว์เซอร์" (Safari/Chrome) หรือพิมพ์ลิงก์นี้ในเบราว์เซอร์</div><input readonly value="'+location.origin+location.pathname+'" onclick="this.select()" style="margin-top:10px;text-align:center">'; return; }
   $('loginBox').classList.add('hide'); $('loading').classList.remove('hide');
   if(!ADT){ try{ await liff.init({liffId:BBO.LIFF_ID}); if(liff.isLoggedIn()) return lineLogin(); }catch(e){} showLogin(''); return; }
   // แสดงข้อมูลล่าสุดที่จำไว้ก่อน (ทันที) แล้วค่อยโหลดใหม่เบื้องหลัง
