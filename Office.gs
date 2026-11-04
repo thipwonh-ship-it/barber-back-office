@@ -2,7 +2,7 @@
 function officeApi(a, p) {
   const owner = a.role === 'owner';
   switch (p.api) {
-    case 'init': return { ok: true, today: p.withToday ? todayData(p.date) : null, me: a, shops: shops().map(s => s.name), barbers: barbers(false).map(b => ({ name: b.name, shop: b.shop, daily: b.daily })), types: expenseTypes(), months: monthList(), closed: list('CLOSED_MONTHS'), paid: list('PAID_MONTHS') };
+    case 'init': return { ok: true, today: p.withToday ? todayData(p.date) : null, me: a, shops: shops().map(s => s.name), barbers: barbers(false).map(b => ({ name: b.name, shop: b.shop, daily: b.daily, min: b.min })), rules: shops().reduce((o, s) => (o[s.name] = { method: s.method, rate: s.rate }, o), {}), types: expenseTypes(), months: monthList(), closed: list('CLOSED_MONTHS'), paid: list('PAID_MONTHS') };
     case 'today': return todayData(p.date);
     case 'month': return monthData(p.ym);
     case 'daily_get': return dailyGet(p.date, p.shop);
@@ -85,9 +85,9 @@ function dailySave(a, p) {
     const ex = dailyRows(r => r.d === p.date && r.shop === shop); const s = sh(SH_DAILY); let n = 0, deleted = 0;
     (p.rows || []).forEach(r => {
       const name = clean(r.name, 30); if (!name) return;
-      const heads = r.heads === '' ? '' : num(r.heads), sales = r.sales === '' ? '' : num(r.sales), cash = r.cash === '' ? '' : num(r.cash), tr = r.transfer === '' ? '' : num(r.transfer), over = r.over === '' || r.over == null ? '' : num(r.over);
+      const heads = r.heads === '' ? '' : num(r.heads), cash = r.cash === '' ? '' : num(r.cash), tr = r.transfer === '' ? '' : num(r.transfer); let sales = r.sales === '' ? '' : num(r.sales); if ((sales === '' || sales === 0) && (cash !== '' || tr !== '')) sales = num(cash) + num(tr); const over = r.over === '' || r.over == null ? '' : num(r.over);
       const cur = ex.find(e => e.name === name);
-      if (heads === '' && sales === '') { if (cur && r.remove) { [[1, 7], [D_OVER, 1], [D_NOTE, 1], [D_BY, 1]].forEach(([c, w]) => s.getRange(cur.row, c, 1, w).clearContent()); deleted++; } return; } // ไม่แตะคอลัมน์สูตร (H J L N O P)
+      if (heads === '' && sales === '' && cash === '' && tr === '') { if (cur && r.remove) { [[1, 7], [D_OVER, 1], [D_NOTE, 1], [D_BY, 1]].forEach(([c, w]) => s.getRange(cur.row, c, 1, w).clearContent()); deleted++; } return; } // ไม่แตะคอลัมน์สูตร (H J L N O P)
       const vals = [[day, shop, name, heads, sales, cash, tr]]; const row = cur ? cur.row : s.getLastRow() + 1;
       s.getRange(row, 1, 1, 7).setValues(vals); s.getRange(row, D_OVER).setValue(over); s.getRange(row, D_NOTE).setValue(clean(r.note, 120)); s.getRange(row, D_BY).setValue(a.name); s.getRange(row, D_DATE).setNumberFormat('yyyy-mm-dd'); n++;
     });
