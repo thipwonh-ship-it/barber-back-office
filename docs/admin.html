@@ -58,8 +58,17 @@ async function boot(){
   if(/PASTE/.test(GAS)){ showLogin('ยังไม่ได้ตั้ง GAS_URL ใน config.js'); return; }
   $('loginBox').classList.add('hide'); $('loading').classList.remove('hide');
   if(!ADT){ try{ await liff.init({liffId:BBO.LIFF_ID}); if(liff.isLoggedIn()) return lineLogin(); }catch(e){} showLogin(''); return; }
-  try{ INIT=await api({api:'init'}); }catch(e){ return; }
-  if(!INIT.ok){ showLogin(INIT.msg||''); return; } ME=INIT.me; $('me').textContent=ME.role==='owner'?'Owner':'Manager'; $('loading').classList.add('hide'); setTimeout(prefetch,1500); go(location.hash.slice(1)||'today');
+  // แสดงข้อมูลล่าสุดที่จำไว้ก่อน (ทันที) แล้วค่อยโหลดใหม่เบื้องหลัง
+  let cached=null; try{ cached=JSON.parse(localStorage.getItem('bbo_init')||'null'); }catch(e){}
+  const first=location.hash.slice(1)||'today';
+  if(cached&&cached.ok){ INIT=cached; ME=INIT.me; $('me').textContent=(ME.role==='owner'?'Owner':'Manager')+' · กำลังอัปเดต…'; $('loading').classList.add('hide'); if(first==='today'&&INIT.today&&INIT.today.date===TODAY){ const el=$('pg_today'); renderToday(el,INIT.today); el.dataset.loaded=1; } go(first); }
+  let r; try{ r=await api({api:'init',withToday:true,date:TODAY}); }catch(e){ if(!cached) showLogin('เชื่อมต่อไม่ได้ ลองใหม่'); return; }
+  if(!r.ok){ showLogin(r.msg||''); return; }
+  INIT=r; ME=INIT.me; try{ localStorage.setItem('bbo_init',JSON.stringify(INIT)); }catch(e){}
+  $('me').textContent=ME.role==='owner'?'Owner':'Manager'; $('loading').classList.add('hide');
+  if(INIT.today){ const el=$('pg_today'); renderToday(el,INIT.today); el.dataset.loaded=1; }
+  if(!cached) go(first);
+  setTimeout(prefetch,800);
 }
 function reload(){ go(PAGE,true); }
 const LOADERS={today:pToday,daily:pDaily,exp:pExp,pond:pPond,month:pMonth,pay:pPay};
@@ -76,7 +85,8 @@ const monthSel=(id,cur,fn)=>'<select id="'+id+'" onchange="'+fn+'">'+INIT.months
 const shopSel=(id,cur)=>'<select id="'+id+'">'+INIT.shops.map(s=>'<option'+(s===cur?' selected':'')+'>'+s+'</option>').join('')+'</select>';
 
 /* ---------- วันนี้ ---------- */
-async function pToday(el,date){ const d=await api({api:'today',date:date||TODAY}); if(!d.ok) throw new Error(d.msg);
+async function pToday(el,date){ const d=await api({api:'today',date:date||TODAY}); if(!d.ok) throw new Error(d.msg); renderToday(el,d); }
+function renderToday(el,d){
   let h='<div class="card"><div class="row"><div><h2>📍 '+d.date+'</h2></div><div><input type="date" value="'+d.date+'" onchange="pToday($(\'pg_today\'),this.value)"></div></div>';
   h+='<div class="tiles">'+d.byShop.map(s=>'<div class="tile"><small>'+s.shop+'</small><b>'+s.heads+' หัว</b><small>'+n(s.sales)+' บ. · ค่าแรง '+n(s.wage)+'</small></div>').join('')+'</div></div>';
   h+='<div class="card"><h2>เข้างานวันนี้</h2>'+d.byShop.map(s=>'<div><b>'+s.shop+'</b>: '+(s.staff.length?s.staff.map(x=>'<span class="pill'+(x.late>0?' late':'')+'">'+x.name+' '+x.tin+(x.tout?'–'+x.tout:'')+(x.late>0?' สาย'+x.late+'น.':'')+'</span>').join(''):'<span class="mute">—</span>')+'</div>').join('')+(d.notYet.length?'<div style="margin-top:6px">ยังไม่กด: '+d.notYet.map(x=>'<span class="pill no">'+x+'</span>').join('')+'</div>':'')+'</div>';

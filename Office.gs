@@ -2,7 +2,7 @@
 function officeApi(a, p) {
   const owner = a.role === 'owner';
   switch (p.api) {
-    case 'init': return { ok: true, me: a, shops: shops().map(s => s.name), barbers: barbers(false).map(b => ({ name: b.name, shop: b.shop, daily: b.daily })), types: expenseTypes(), months: monthList(), closed: list('CLOSED_MONTHS'), paid: list('PAID_MONTHS') };
+    case 'init': return { ok: true, today: p.withToday ? todayData(p.date) : null, me: a, shops: shops().map(s => s.name), barbers: barbers(false).map(b => ({ name: b.name, shop: b.shop, daily: b.daily })), types: expenseTypes(), months: monthList(), closed: list('CLOSED_MONTHS'), paid: list('PAID_MONTHS') };
     case 'today': return todayData(p.date);
     case 'month': return monthData(p.ym);
     case 'daily_get': return dailyGet(p.date, p.shop);
