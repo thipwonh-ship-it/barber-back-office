@@ -4,7 +4,7 @@ function officeApi(a, p) {
   switch (p.api) {
     case 'init': return { ok: true, today: p.withToday ? todayData(p.date) : null, me: a, shops: shops().map(s => s.name), barbers: barbers(false).map(b => ({ name: b.name, shop: b.shop, daily: b.daily, min: b.min })), rules: shops().reduce((o, s) => (o[s.name] = { method: s.method, rate: s.rate }, o), {}), types: expenseTypes(), months: monthList(), closed: list('CLOSED_MONTHS'), paid: list('PAID_MONTHS') };
     case 'today': return todayData(p.date);
-    case 'month': return monthData(p.ym);
+    case 'month': return monthData(p.ym, a);
     case 'daily_get': return dailyGet(p.date, p.shop);
     case 'daily_save': return dailySave(a, p);
     case 'expense_add': return expenseAdd(a, p);
@@ -61,7 +61,7 @@ function todayData(dateStr) {
 }
 
 /* ---------- รายเดือน ---------- */
-function monthData(ymStr) {
+function monthData(ymStr, who) {
   ymStr = /^\d{4}-\d{2}$/.test(ymStr || '') ? ymStr : ym(todayBkk()); const S = shops().map(s => s.name);
   const d = dailyRows(r => r.d.slice(0, 7) === ymStr), x = expenseRows(ymStr), t = timeRows(r => r.d.slice(0, 7) === ymStr);
   const days = {}; d.forEach(r => { const k = r.d; days[k] = days[k] || { d: k }; days[k][r.shop] = days[k][r.shop] || { heads: 0, sales: 0 }; days[k][r.shop].heads += r.heads; days[k][r.shop].sales += r.sales; });
@@ -69,7 +69,21 @@ function monthData(ymStr) {
   t.forEach(r => { if (r.late > 0 && perBarber[r.name]) { perBarber[r.name].late++; perBarber[r.name].lateMin += r.late; } });
   const tg = targets(ymStr);
   const byShop = S.map(s => { const rows = d.filter(r => r.shop === s); const ex = x.filter(r => r.shop === s && r.type !== 'เบิกช่าง'); const byType = {}; ex.forEach(r => byType[r.type] = (byType[r.type] || 0) + r.amt); const sales = rows.reduce((a, r) => a + r.sales, 0), wage = rows.reduce((a, r) => a + r.paid, 0), exp = ex.reduce((a, r) => a + r.amt, 0); return { shop: s, heads: rows.reduce((a, r) => a + r.heads, 0), target: tg[s] || 0, sales, wage, expenses: byType, expTotal: exp, profit: sales - wage - exp }; });
-  return { ok: true, ym: ymStr, days: Object.values(days).sort((a, b) => a.d < b.d ? -1 : 1), barbers: Object.values(perBarber), byShop, total: { sales: byShop.reduce((a, s) => a + s.sales, 0), wage: byShop.reduce((a, s) => a + s.wage, 0), exp: byShop.reduce((a, s) => a + s.expTotal, 0), profit: byShop.reduce((a, s) => a + s.profit, 0) }, closed: list('CLOSED_MONTHS').includes(ymStr), paid: list('PAID_MONTHS').includes(ymStr) };
+  const customers = who && who.role === 'owner' ? customerSummary(ymStr) : null;
+  return { ok: true, ym: ymStr, days: Object.values(days).sort((a, b) => a.d < b.d ? -1 : 1), barbers: Object.values(perBarber), byShop, total: { sales: byShop.reduce((a, s) => a + s.sales, 0), wage: byShop.reduce((a, s) => a + s.wage, 0), exp: byShop.reduce((a, s) => a + s.expTotal, 0), profit: byShop.reduce((a, s) => a + s.profit, 0) }, closed: list('CLOSED_MONTHS').includes(ymStr), paid: list('PAID_MONTHS').includes(ymStr) , customers };
+}
+
+/** สรุปลูกค้ารายเดือนจากข้อความสรุปร้าน (เฉพาะ owner) — ใหม่/ประจำ + ที่มาลูกค้าใหม่ */
+function customerSummary(ymStr) {
+  const out = {};
+  noteRows(x => x.d.slice(0, 7) === ymStr && x.customers != null).forEach(x => {
+    const o = out[x.shop] = out[x.shop] || { shop: x.shop, days: 0, total: 0, newC: 0, regC: 0, noDetail: 0, sources: {} };
+    o.days++; o.total += x.customers;
+    if (x.newC == null) { o.noDetail += x.customers; return; }
+    o.newC += x.newC; o.regC += x.regC;
+    String(x.sources || '').split(',').map(s => s.replace(/เห็นจาก|มาจาก|รู้จักจาก|ผ่าน/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).forEach(s => { const k = s.toLowerCase(); o.sources[k] = (o.sources[k] || 0) + 1; });
+  });
+  return Object.values(out).map(o => Object.assign(o, { sources: Object.keys(o.sources).map(k => ({ src: k, n: o.sources[k] })).sort((a, b) => b.n - a.n) }));
 }
 
 /* ---------- กรอกยอดรายวัน (ปิ๊ก) ---------- */
