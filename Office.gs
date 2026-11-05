@@ -4,7 +4,7 @@ function officeApi(a, p) {
   switch (p.api) {
     case 'init': return { ok: true, today: p.withToday ? todayData(p.date) : null, me: a, shops: shops().map(s => s.name), barbers: barbers(false).map(b => ({ name: b.name, shop: b.shop, daily: b.daily, min: b.min })), rules: shops().reduce((o, s) => (o[s.name] = { method: s.method, rate: s.rate }, o), {}), types: expenseTypes(), months: monthList(), closed: list('CLOSED_MONTHS'), paid: list('PAID_MONTHS') };
     case 'today': return todayData(p.date);
-    case 'month': return monthData(p.ym);
+    case 'month': return monthData(p.ym, a);
     case 'daily_get': return dailyGet(p.date, p.shop);
     case 'daily_save': return dailySave(a, p);
     case 'expense_add': return expenseAdd(a, p);
@@ -13,6 +13,7 @@ function officeApi(a, p) {
     case 'pond': return pondData();
     case 'pond_paid': return pondPaid(a, p);
     case 'pond_unpay': return pondUnpay(a, p);
+    case 'slip_fix': { const s = ss().getSheetByName(SH_SLIP); const row = num(p.row); if (!s || row < 2) return { ok: false, msg: 'ไม่พบสลิป' }; s.getRange(row, 5).setValue(p.amount === '' ? '' : num(p.amount)); s.getRange(row, 10).setValue('แก้โดย ' + a.name + ' ' + nowText()); return { ok: true, msg: 'แก้ยอดสลิปแล้ว', data: dailyGet(p.date, p.shop) }; }
     case 'payroll': return payrollData(p.ym);
     case 'target_set': { if (!owner) return deny(); if (!(num(p.val) > 0)) return { ok: false, msg: 'ใส่จำนวนหัวเป็นตัวเลข' }; const ok = setTarget(p.ym, p.shop, p.val); return ok ? { ok: true, msg: 'ตั้งเป้า ' + p.shop + ' ' + p.ym + ' = ' + num(p.val) + ' หัว' } : { ok: false, msg: 'ไม่พบเดือน ' + p.ym + ' หรือร้าน ' + p.shop + ' ในแผ่น ตั้งค่า (A33:D57)' }; }
     case 'close_month': if (!owner) return deny(); return closeMonth(p.ym);
@@ -35,11 +36,11 @@ function gpsDist(v) { const m = /\((\d+) ม\.\)/.exec(String(v || '')); return 
 function timeRows(filter) { return rowsOf(SH_TIME, T_GPSOUT).map(r => ({ d: dateKey(r[0]), name: String(r[T_NAME - 1]).trim(), shop: String(r[T_SHOP - 1]).trim(), shift: String(r[T_SHIFT - 1]), tin: tStr(r[T_IN - 1]), tout: tStr(r[T_OUT - 1]), late: num(r[T_LATE - 1]), distIn: gpsDist(r[T_GPSIN - 1]), distOut: gpsDist(r[T_GPSOUT - 1]), status: String(r[T_STATUS - 1] || ''), note: String(r[T_NOTE - 1] || '') })).filter(x => x.d && (!filter || filter(x))); }
 
 /* ---------- เงินสดคงเหลือควรมี ต่อร้าน ---------- */
-function cashBalance() {
+function cashBalance(upTo) {
   const out = {}; const S = shops();
   const d = dailyRows(), x = expenseRows(), c = cashRows();
   S.forEach(s => {
-    const from = s.cashFrom || '0000-00-00'; const ge = r => r.shop === s.name && r.d >= from;
+    const from = s.cashFrom || '0000-00-00'; const ge = r => r.shop === s.name && r.d >= from && (!upTo || r.d <= upTo);
     const inCash = d.filter(ge).reduce((a, r) => a + r.cash, 0);
     const outCash = x.filter(r => ge(r) && r.from === CASH_FROM).reduce((a, r) => a + r.amt, 0);
     const coll = c.filter(ge).reduce((a, r) => a + r.amt, 0);
@@ -60,7 +61,7 @@ function todayData(dateStr) {
 }
 
 /* ---------- รายเดือน ---------- */
-function monthData(ymStr) {
+function monthData(ymStr, who) {
   ymStr = /^\d{4}-\d{2}$/.test(ymStr || '') ? ymStr : ym(todayBkk()); const S = shops().map(s => s.name);
   const d = dailyRows(r => r.d.slice(0, 7) === ymStr), x = expenseRows(ymStr), t = timeRows(r => r.d.slice(0, 7) === ymStr);
   const days = {}; d.forEach(r => { const k = r.d; days[k] = days[k] || { d: k }; days[k][r.shop] = days[k][r.shop] || { heads: 0, sales: 0 }; days[k][r.shop].heads += r.heads; days[k][r.shop].sales += r.sales; });
@@ -68,7 +69,21 @@ function monthData(ymStr) {
   t.forEach(r => { if (r.late > 0 && perBarber[r.name]) { perBarber[r.name].late++; perBarber[r.name].lateMin += r.late; } });
   const tg = targets(ymStr);
   const byShop = S.map(s => { const rows = d.filter(r => r.shop === s); const ex = x.filter(r => r.shop === s && r.type !== 'เบิกช่าง'); const byType = {}; ex.forEach(r => byType[r.type] = (byType[r.type] || 0) + r.amt); const sales = rows.reduce((a, r) => a + r.sales, 0), wage = rows.reduce((a, r) => a + r.paid, 0), exp = ex.reduce((a, r) => a + r.amt, 0); return { shop: s, heads: rows.reduce((a, r) => a + r.heads, 0), target: tg[s] || 0, sales, wage, expenses: byType, expTotal: exp, profit: sales - wage - exp }; });
-  return { ok: true, ym: ymStr, days: Object.values(days).sort((a, b) => a.d < b.d ? -1 : 1), barbers: Object.values(perBarber), byShop, total: { sales: byShop.reduce((a, s) => a + s.sales, 0), wage: byShop.reduce((a, s) => a + s.wage, 0), exp: byShop.reduce((a, s) => a + s.expTotal, 0), profit: byShop.reduce((a, s) => a + s.profit, 0) }, closed: list('CLOSED_MONTHS').includes(ymStr), paid: list('PAID_MONTHS').includes(ymStr) };
+  const customers = who && who.role === 'owner' ? customerSummary(ymStr) : null;
+  return { ok: true, ym: ymStr, days: Object.values(days).sort((a, b) => a.d < b.d ? -1 : 1), barbers: Object.values(perBarber), byShop, total: { sales: byShop.reduce((a, s) => a + s.sales, 0), wage: byShop.reduce((a, s) => a + s.wage, 0), exp: byShop.reduce((a, s) => a + s.expTotal, 0), profit: byShop.reduce((a, s) => a + s.profit, 0) }, closed: list('CLOSED_MONTHS').includes(ymStr), paid: list('PAID_MONTHS').includes(ymStr) , customers };
+}
+
+/** สรุปลูกค้ารายเดือนจากข้อความสรุปร้าน (เฉพาะ owner) — ใหม่/ประจำ + ที่มาลูกค้าใหม่ */
+function customerSummary(ymStr) {
+  const out = {};
+  noteRows(x => x.d.slice(0, 7) === ymStr && x.customers != null).forEach(x => {
+    const o = out[x.shop] = out[x.shop] || { shop: x.shop, days: 0, total: 0, newC: 0, regC: 0, noDetail: 0, sources: {} };
+    o.days++; o.total += x.customers;
+    if (x.newC == null) { o.noDetail += x.customers; return; }
+    o.newC += x.newC; o.regC += x.regC;
+    String(x.sources || '').split(',').map(s => s.replace(/เห็นจาก|มาจาก|รู้จักจาก|ผ่าน/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).forEach(s => { const k = s.toLowerCase(); o.sources[k] = (o.sources[k] || 0) + 1; });
+  });
+  return Object.values(out).map(o => Object.assign(o, { sources: Object.keys(o.sources).map(k => ({ src: k, n: o.sources[k] })).sort((a, b) => b.n - a.n) }));
 }
 
 /* ---------- กรอกยอดรายวัน (ปิ๊ก) ---------- */
@@ -78,7 +93,9 @@ function dailyGet(dateStr, shop) {
   const punched = timeRows(r => r.d === day && r.shop === shop).map(r => r.name);
   const rows = names.map(n => { const r = ex.find(e => e.name === n); const b = barberByName(n); return { name: n, main: b && b.shop === shop, punched: punched.includes(n), heads: r ? r.heads : '', sales: r ? r.sales : '', cash: r ? r.cash : '', transfer: r ? r.transfer : '', calc: r ? r.calc : '', over: r ? r.over : '', paid: r ? r.paid : '', note: r ? r.note : '', exists: !!r }; });
   rows.sort((a, b) => (b.main - a.main) || (b.punched - a.punched));
-  return { ok: true, date: day, shop, rows, cash: cashBalance()[shop] || null };
+  const sl = slipRows(x => x.d === day && x.shop === shop && slipCounted(x)), bk = slipRows(x => x.d === day && x.shop === shop && x.note === 'สมุด'), tips = expenseRows().filter(x => x.d === day && x.shop === shop && x.type === 'ทิปช่าง');
+  rows.forEach(r => { const m = sl.filter(x => x.name === r.name); r.slips = m.map(x => ({ row: x.row, amount: x.amount, read: x.read, link: x.link, at: x.at, note: x.note })); r.tips = tips.filter(x => x.name === r.name).reduce((a, x) => a + x.amt, 0); });
+  return { ok: true, date: day, shop, rows, books: bk.map(x => ({ link: x.link, at: x.at, name: x.name })), shopNote: noteRows(x => x.d === day && x.shop === shop)[0] || null, cashAt: (cashBalance(day)[shop] || {}).balance, cash: cashBalance()[shop] || null };
 }
 function dailySave(a, p) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
