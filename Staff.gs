@@ -143,18 +143,20 @@ function ocrText(blob) {
   try { DriveApp.getFileById(id).setTrashed(true); } catch (e) {}
   return t || '';
 }
+/** ปรับข้อความ OCR ภาษาไทย: ํา → ำ และตัดวรรณยุกต์ (OCR มักอ่านวรรณยุกต์หาย/เพี้ยน) ใช้สำหรับจับคำ */
+function thaiNorm(t) { return String(t || '').replace(/\u0E4D\u0E32/g, '\u0E33').replace(/[\u0E48-\u0E4B]/g, ''); }
 /** หายอดเงิน + เลขอ้างอิงจากข้อความสลิป */
 function parseSlip(text) {
-  const lines = String(text || '').split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
-  const money = l => (l.match(/\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2}/g) || []).map(v => Number(v.replace(/,/g, '')));
-  const fee = l => /ธรรมเนียม|fee/i.test(l);
+  const lines = thaiNorm(text).split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const cut = l => l.split(/คาธรรมเนียม|ธรรมเนียม|fee/i)[0];            // ตัดส่วนค่าธรรมเนียมทิ้ง (อาจอยู่บรรทัดเดียวกับยอด)
+  const money = l => (cut(l).match(/\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2}/g) || []).map(v => Number(v.replace(/,/g, ''))).filter(x => x > 0);
   let amount = null;
   for (let i = 0; i < lines.length && amount == null; i++) {
-    if (/จำนวน|amount/i.test(lines[i]) && !fee(lines[i])) { const v = money(lines[i]).concat(i + 1 < lines.length && !fee(lines[i + 1]) ? money(lines[i + 1]) : []).filter(x => x > 0); if (v.length) amount = v[0]; }
+    if (/จำนวน|amount/i.test(cut(lines[i]))) { const v = money(lines[i]).concat(i + 1 < lines.length ? money(lines[i + 1]) : []); if (v.length) amount = v[0]; }
   }
-  if (amount == null) for (const l of lines) if (/บาท|thb|฿/i.test(l) && !fee(l)) { const v = money(l).filter(x => x > 0); if (v.length) { amount = v[0]; break; } }
-  if (amount == null) { const v = lines.filter(l => !fee(l)).flatMap(money).filter(x => x > 0 && x < 100000); if (v.length) amount = Math.max.apply(null, v); }
-  let ref = ''; const m = String(text || '').replace(/\s+/g, ' ').match(/(?:เลขที่รายการ|รหัสอ้างอิง|หมายเลขอ้างอิง|เลขที่อ้างอิง|Ref(?:erence)?(?:\s*No\.?)?|Transaction\s*(?:ID|No\.?))\s*[:：]?\s*([A-Za-z0-9]{8,})/i);
+  if (amount == null) for (const l of lines) if (/บาท|thb|฿/i.test(cut(l))) { const v = money(l); if (v.length) { amount = v[0]; break; } }
+  if (amount == null) { const v = lines.flatMap(money).filter(x => x < 100000); if (v.length) amount = Math.max.apply(null, v); }
+  let ref = ''; const m = lines.join(' ').match(/(?:เลขทีรายการ|รหัสอางอิง|หมายเลขอางอิง|เลขทีอางอิง|Ref(?:erence)?(?:\s*No\.?)?|Transaction\s*(?:ID|No\.?))\s*[:：]?\s*([A-Za-z0-9]{8,})/i);
   if (m) ref = m[1];
   return { amount, ref };
 }
@@ -174,7 +176,7 @@ function slipIntake(uid, msgId) {
     const all = slipRows();
     if (all.find(x => x.hash === hash)) return '⚠️ สลิปนี้ส่งไปแล้ว (รูปซ้ำ) — ไม่ได้บันทึกซ้ำ';
     const text = ocrText(blob.setName('slip.jpg')); const p = parseSlip(text);
-    const looksSlip = /โอน|สำเร็จ|จำนวน|บาท|THB|ธนาคาร|ธ\.|พร้อมเพย์|PromptPay|Transfer|Amount|กสิกร|ไทยพาณิชย์|กรุงเทพ|กรุงไทย|กรุงศรี|ออมสิน|ทหารไทย|ttb|K PLUS|SCB|Krungthai|Bangkok Bank|เลขที่รายการ|อ้างอิง/i.test(text);
+    const looksSlip = /โอน|สำเร็จ|จำนวน|บาท|THB|ธนาคาร|ธ\.|พรอมเพย|PromptPay|Transfer|Amount|กสิกร|ไทยพาณิชย|กรุงเทพ|กรุงไทย|กรุงศรี|ออมสิน|ทหารไทย|ttb|K PLUS|SCB|Krungthai|Bangkok Bank|เลขทีรายการ|อางอิง/i.test(thaiNorm(text));
     if (text && !looksSlip && p.amount == null) return '🖼️ รูปนี้ไม่ใช่สลิปโอน — ไม่ได้บันทึก\n(รูป/วิดีโอผลงาน ส่งในกลุ่มร้านเหมือนเดิมนะคะ แชทนี้รับเฉพาะสลิป)';
     if (p.ref && all.find(x => x.ref === p.ref)) return '⚠️ สลิปนี้ส่งไปแล้ว (เลขอ้างอิง ' + p.ref + ' ซ้ำ) — ไม่ได้บันทึกซ้ำ';
     const f = subFolder('สลิปโอน ' + ym(now)).createFile(blob.setName(day + ' ' + shop + ' ' + b.name + ' ' + Utilities.formatDate(now, TZ, 'HHmmss') + '.jpg'));
