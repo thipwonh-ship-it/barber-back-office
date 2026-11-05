@@ -123,12 +123,12 @@ function mySlipPdf(tok, ymStr) {
 const SH_SLIP = 'สลิปโอน';
 // A วันที่ B ช่าง C ร้าน D ยอดที่อ่านได้ E ยอดที่แก้ F เลขอ้างอิง G hash H ลิงก์ I เวลาส่ง J หมายเหตุ
 function slipSheet() {
-  let s = ss().getSheetByName(SH_SLIP); if (s) return s;
-  s = ss().insertSheet(SH_SLIP); s.getRange('A1:J1').setValues([['วันที่', 'ช่าง', 'ร้าน', 'ยอดที่อ่านได้', 'ยอดที่แก้', 'เลขอ้างอิง', 'hash', 'ลิงก์สลิป', 'เวลาส่ง', 'หมายเหตุ']]).setFontWeight('bold'); s.setFrozenRows(1); return s;
+  let s = ss().getSheetByName(SH_SLIP); if (s) { if (!s.getRange('K1').getValue()) s.getRange('K1').setValue('ชุด').setFontWeight('bold'); return s; }
+  s = ss().insertSheet(SH_SLIP); s.getRange('A1:K1').setValues([['วันที่', 'ช่าง', 'ร้าน', 'ยอดที่อ่านได้', 'ยอดที่แก้', 'เลขอ้างอิง', 'hash', 'ลิงก์สลิป', 'เวลาส่ง', 'หมายเหตุ', 'ชุด']]).setFontWeight('bold'); s.setFrozenRows(1); return s;
 }
 function slipRows(filter) {
   const s = ss().getSheetByName(SH_SLIP); if (!s || s.getLastRow() < 2) return [];
-  return s.getRange(2, 1, s.getLastRow() - 1, 10).getValues().map((r, i) => ({ row: i + 2, d: dateKey(r[0]), name: String(r[1]).trim(), shop: String(r[2]).trim(), read: r[3] === '' ? null : num(r[3]), fix: r[4] === '' ? null : num(r[4]), ref: String(r[5] || ''), hash: String(r[6] || ''), link: String(r[7] || ''), at: tStr(r[8]), note: String(r[9] || '') }))
+  return s.getRange(2, 1, s.getLastRow() - 1, 11).getValues().map((r, i) => ({ set: String(r[10] || ''), row: i + 2, d: dateKey(r[0]), name: String(r[1]).trim(), shop: String(r[2]).trim(), read: r[3] === '' ? null : num(r[3]), fix: r[4] === '' ? null : num(r[4]), ref: String(r[5] || ''), hash: String(r[6] || ''), link: String(r[7] || ''), at: tStr(r[8]), note: String(r[9] || '') }))
     .map(x => (x.amount = x.fix != null ? x.fix : x.read, x)).filter(filter || (() => true));
 }
 /** อ่านข้อความจากรูปด้วย OCR ของ Google Drive (แปลงเป็น Google Doc ชั่วคราวแล้วลบ) */
@@ -181,36 +181,62 @@ const LOOKS_SLIP = /สำเร็จ|ธรรมเนียม|อางอ�
 /** สลิป = มีคำเฉพาะของสลิปธนาคาร + (อ่านยอดได้ หรือ มีเลขอ้างอิง) — ไม่งั้นถือเป็นรูปสมุด/อื่นๆ */
 function isSlipText(text, p) { return LOOKS_SLIP.test(thaiNorm(text)) && (p.amount != null || !!p.ref); }
 
-/** webhook: ช่างส่งรูปเข้าแชท → เก็บรูปทันที (ไม่ล็อกนาน)
- *  ส่ง 1 รูป → อ่านยอดเลยแล้วตอบ (~5–10 วิ)
- *  ส่งหลายรูปพร้อมกัน (imageSet) → เข้าคิว ตอบ "รับ N ใบ" ครั้งเดียว แล้วอ่านเบื้องหลัง + ส่งสรุป 1 ข้อความ */
+/** webhook: ช่างส่งรูปเข้าแชท → เก็บรูป + อ่านยอดทันที (แต่ละรูปเป็นคนละ request จึงอ่านพร้อมกันได้)
+ *  ส่ง 1 รูป → ตอบยอดของรูปนั้น
+ *  ส่งหลายรูปพร้อมกัน (imageSet) → รูปที่อ่านเสร็จเป็นรูปสุดท้ายของชุด ตอบสรุปรวมครั้งเดียว (ใช้ reply ไม่เสียโควตา push) */
 function slipIntake(uid, msgId, set) {
   const b = barberByUid(uid);
   if (!b) return adminRole(uid) ? null : 'ส่งสลิปได้หลังผูกบัญชีช่าง — กดเมนู "ลงเวลา" แล้วใส่ PIN ก่อนค่ะ';
-  const res = UrlFetchApp.fetch('https://api-data.line.me/v2/bot/message/' + msgId + '/content', { headers: { Authorization: 'Bearer ' + lineToken() }, muteHttpExceptions: true });
-  if (res.getResponseCode() !== 200) return '⚠️ ดึงรูปไม่ได้ ลองส่งใหม่อีกครั้ง';
-  const blob = res.getBlob(); const bytes = blob.getBytes();
-  const hash = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, bytes).map(x => ('0' + (x & 255).toString(16)).slice(-2)).join('');
-  const now = new Date(), day = ymd(todayBkk());
-  const t = timeRows(r => r.d === day && r.name === b.name); const shop = t.length ? t[t.length - 1].shop : b.shop;
-  const f = subFolder('สลิปโอน ' + ym(now)).createFile(blob.setName(day + ' ' + shop + ' ' + b.name + ' ' + Utilities.formatDate(now, TZ, 'HHmmss') + '-' + String(msgId).slice(-4) + '.jpg'));
-  f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  let row;
-  const lock = LockService.getScriptLock(); lock.waitLock(30000);
+  const setId = set && set.id ? String(set.id) : '', total = set ? Number(set.total) || 1 : 1;
+  let r = { st: 'err' }, row = null;
   try {
-    if (slipRows().find(x => x.hash === hash)) { f.setTrashed(true); if (set) { const c = CacheService.getScriptCache(), k = 'slipdup_' + b.name; c.put(k, String(Number(c.get(k) || 0) + 1), 3600); ensureSlipJob(); } else return '⚠️ สลิปนี้ส่งไปแล้ว (รูปซ้ำ) — ไม่ได้บันทึกซ้ำ'; }
-    else {
-      const s = slipSheet(); row = s.getLastRow() + 1;
-      s.getRange(row, 1, 1, 10).setValues([[parseYmd(day), b.name, shop, '', '', '', hash, f.getUrl(), hm(now), SLIP_WAIT]]); s.getRange(row, 1).setNumberFormat('yyyy-mm-dd');
-      if (set) ensureSlipJob();
+    const res = UrlFetchApp.fetch('https://api-data.line.me/v2/bot/message/' + msgId + '/content', { headers: { Authorization: 'Bearer ' + lineToken() }, muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) { if (!setId) return '⚠️ ดึงรูปไม่ได้ ลองส่งใหม่อีกครั้ง'; throw new Error('fetch'); }
+    const blob = res.getBlob(); const bytes = blob.getBytes();
+    const hash = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, bytes).map(x => ('0' + (x & 255).toString(16)).slice(-2)).join('');
+    const now = new Date(), day = ymd(todayBkk());
+    const t = timeRows(x => x.d === day && x.name === b.name); const shop = t.length ? t[t.length - 1].shop : b.shop;
+    const f = subFolder('สลิปโอน ' + ym(now)).createFile(blob.setName(day + ' ' + shop + ' ' + b.name + ' ' + Utilities.formatDate(now, TZ, 'HHmmss') + '-' + String(msgId).slice(-4) + '.jpg'));
+    f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    const lock = LockService.getScriptLock(); lock.waitLock(30000);
+    try {
+      if (slipRows().find(x => x.hash === hash)) { f.setTrashed(true); r = { st: 'dupimg' }; }
+      else { const s = slipSheet(); row = s.getLastRow() + 1; s.getRange(row, 1, 1, 11).setValues([[parseYmd(day), b.name, shop, '', '', '', hash, f.getUrl(), hm(now), SLIP_WAIT, setId]]); s.getRange(row, 1).setNumberFormat('yyyy-mm-dd'); }
+    } finally { lock.releaseLock(); }
+    if (row) r = slipRead(row, blob);
+    if (!setId) {
+      if (r.st === 'dupimg') return '⚠️ สลิปนี้ส่งไปแล้ว (รูปซ้ำ) — ไม่ได้บันทึกซ้ำ';
+      if (r.st === 'book') return '📒 รับรูปสมุดแล้ว — ผู้จัดการจะใช้ตรวจตอนกรอกยอด\n(ถ้าเป็นสลิปแต่ระบบอ่านไม่ออก ผู้จัดการจะตรวจเอง)';
+      if (r.st === 'dup') return '⚠️ สลิปนี้ส่งไปแล้ว (เลขอ้างอิง ' + r.ref + ' ซ้ำ) — ไม่นับซ้ำ';
+      const mine = slipRows(x => x.d === day && x.name === b.name && x.shop === shop && slipCounted(x)); const tot = mine.reduce((a, x) => a + (x.amount || 0), 0);
+      return (r.amount == null ? '📸 รับสลิปแล้ว แต่อ่านยอดไม่ได้ — ผู้จัดการจะตรวจเอง' : '✅ รับสลิป ' + money(r.amount) + ' บาท') + '\n' + shop + ' · ' + day + '\nวันนี้ส่งแล้ว ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท' + (r.note ? '\n⚠️ ' + r.note + ' — ผู้จัดการจะตรวจ' : '');
     }
+  } catch (e) { if (!setId) throw e; r = { st: 'err' }; }
+  // ---- ชุดหลายรูป: นับว่าเสร็จกี่รูปแล้ว รูปสุดท้ายเป็นคนตอบสรุป ----
+  const lock = LockService.getScriptLock(); lock.waitLock(30000);
+  let last = false, extra = {};
+  try {
+    const c = CacheService.getScriptCache(), k = 'slipset_' + setId, o = JSON.parse(c.get(k) || '{"n":0,"dupimg":0,"err":0}');
+    o.n++; if (r.st === 'dupimg') o.dupimg++; if (r.st === 'err') o.err++;
+    c.put(k, JSON.stringify(o), 21600); last = o.n >= total; extra = o;
   } finally { lock.releaseLock(); }
-  if (set) return Number(set.index) === Number(set.total) ? '📥 รับสลิป ' + set.total + ' ใบแล้ว กำลังอ่านยอด — อีก 1–2 นาทีจะส่งสรุปให้ค่ะ' : null;
-  const r = slipRead(row, blob);
-  if (r.st === 'book') return '📒 รับรูปสมุดแล้ว — ผู้จัดการจะใช้ตรวจตอนกรอกยอด\n(ถ้าเป็นสลิปแต่ระบบอ่านไม่ออก ผู้จัดการจะตรวจเอง)';
-  if (r.st === 'dup') return '⚠️ สลิปนี้ส่งไปแล้ว (เลขอ้างอิง ' + r.ref + ' ซ้ำ) — ไม่นับซ้ำ';
-  const mine = slipRows(x => x.d === day && x.name === b.name && x.shop === shop && slipCounted(x)); const tot = mine.reduce((a, x) => a + (x.amount || 0), 0);
-  return (r.amount == null ? '📸 รับสลิปแล้ว แต่อ่านยอดไม่ได้ — ผู้จัดการจะตรวจเอง' : '✅ รับสลิป ' + money(r.amount) + ' บาท') + '\n' + shop + ' · ' + day + '\nวันนี้ส่งแล้ว ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท' + (r.note ? '\n⚠️ ' + r.note + ' — ผู้จัดการจะตรวจ' : '');
+  return last ? slipSetSummary(b.name, setId, total, extra) : null;
+}
+/** ข้อความสรุปของชุดสลิป */
+function slipSetSummary(name, setId, total, extra) {
+  const rs = slipRows(x => x.set === setId), day = ymd(todayBkk());
+  const ok = rs.filter(x => slipCounted(x) && x.note !== SLIP_WAIT), amts = ok.filter(x => x.amount != null).map(x => x.amount), bad = ok.filter(x => x.amount == null);
+  const dup = rs.filter(x => /^ซ้ำ/.test(x.note)).length + (extra.dupimg || 0), book = rs.filter(x => x.note === 'สมุด').length, old = ok.filter(x => /ไม่ใช่วันนี้/.test(x.note)).length;
+  const shop = rs.length ? rs[0].shop : '';
+  const mine = slipRows(x => x.d === day && x.name === name && x.shop === shop && slipCounted(x)), tot = mine.reduce((a, x) => a + (x.amount || 0), 0), sum = amts.reduce((a, v) => a + v, 0);
+  return '🧾 รับสลิปทั้งสิ้น ' + ok.length + ' ใบ' + (shop ? ' · ' + shop : '') +
+    (amts.length ? '\nยอด: ' + amts.map(money).join(', ') + '\nรวม ' + money(sum) + ' บาท' : '') +
+    (bad.length ? '\n📸 อ่านยอดไม่ได้ ' + bad.length + ' ใบ — ผู้จัดการจะตรวจ' : '') +
+    (old ? '\n⚠️ สลิปไม่ใช่วันนี้ ' + old + ' ใบ' : '') +
+    (dup ? '\n⚠️ ส่งซ้ำ ' + dup + ' ใบ (ไม่นับ)' : '') +
+    (book ? '\n📒 รูปสมุด ' + book + ' รูป' : '') +
+    (extra.err ? '\n⚠️ บันทึกไม่สำเร็จ ' + extra.err + ' รูป — ส่งรูปนั้นใหม่อีกครั้ง' : '') +
+    (mine.length > ok.length ? '\nทั้งวันนี้ ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท' : '');
 }
 /** อ่านยอดสลิปแถว row (OCR นอกล็อก) แล้วบันทึกผล → { st: ok|dup|notslip, amount, ref, note } */
 function slipRead(row, blob) {
@@ -228,37 +254,8 @@ function slipRead(row, blob) {
     return { st: 'ok', amount: p.amount, ref: p.ref, note };
   } finally { lock.releaseLock(); }
 }
-/** ตั้งงานอ่านสลิปเบื้องหลัง (ถ้ายังไม่มี) — เรียกภายใต้ script lock */
-function ensureSlipJob() {
-  if (ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'slipJob')) return;
-  ScriptApp.newTrigger('slipJob').timeBased().after(20 * 1000).create();
-}
-/** งานเบื้องหลัง: อ่านสลิปที่ 'รออ่าน' ทั้งหมด แล้วส่งสรุปให้ช่างคนละ 1 ข้อความ */
-function slipJob() {
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'slipJob').forEach(t => ScriptApp.deleteTrigger(t));
-  const t0 = Date.now(), done = {};
-  for (const x of slipRows(x => x.note === SLIP_WAIT)) {
-    if (Date.now() - t0 > 4.5 * 60 * 1000) break;                       // กันเกินเวลา 6 นาทีของ Apps Script
-    let r; try { r = slipRead(x.row); } catch (e) { r = { st: 'ok', amount: null, note: '' }; slipSheet().getRange(x.row, 10).setValue(''); }
-    const k = x.name + '|' + x.shop + '|' + x.d; (done[k] = done[k] || []).push(r);
-  }
-  Object.keys(done).forEach(k => {
-    const [name, shop, d] = k.split('|'), rs = done[k];
-    const ck = 'slipdup_' + name, cache = CacheService.getScriptCache(), hdup = Number(cache.get(ck) || 0); cache.remove(ck);
-    const ok = rs.filter(r => r.st === 'ok'), bad = ok.filter(r => r.amount == null), dup = rs.filter(r => r.st === 'dup'), ns = rs.filter(r => r.st === 'book'), old = ok.filter(r => r.note);
-    const mine = slipRows(x => x.d === d && x.name === name && x.shop === shop && slipCounted(x)); const tot = mine.reduce((a, x) => a + (x.amount || 0), 0);
-    const amts = ok.filter(r => r.amount != null).map(r => r.amount), sum = amts.reduce((a, v) => a + v, 0);
-    pushBarber(name, '🧾 รับสลิปทั้งสิ้น ' + ok.length + ' ใบ · ' + shop +
-      (amts.length ? '\nยอด: ' + amts.map(money).join(', ') + '\nรวม ' + money(sum) + ' บาท' : '') +
-      (bad.length ? '\n📸 อ่านยอดไม่ได้ ' + bad.length + ' ใบ — ผู้จัดการจะตรวจ' : '') +
-      (old.length ? '\n⚠️ สลิปไม่ใช่วันนี้ ' + old.length + ' ใบ' : '') +
-      (dup.length + hdup ? '\n⚠️ ส่งซ้ำ ' + (dup.length + hdup) + ' ใบ (ไม่นับ)' : '') +
-      (ns.length ? '\n📒 รูปสมุด ' + ns.length + ' รูป' : '') +
-      (mine.length > amts.length + bad.length ? '\nทั้งวันนี้ ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท' : ''));
-  });
-  const lock = LockService.getScriptLock(); lock.waitLock(30000);
-  try { if (slipRows(x => x.note === SLIP_WAIT).length) ensureSlipJob(); } finally { lock.releaseLock(); }
-}
+/** (รันเองใน editor ได้) อ่านสลิปที่ค้างสถานะ 'รออ่าน' ทั้งหมด */
+function slipRetry() { slipRows(x => x.note === SLIP_WAIT).forEach(x => { try { slipRead(x.row); } catch (e) { Logger.log(x.row + ' ' + e.message); } }); }
 
 /* ---------- สรุปร้าน (ข้อความที่ช่างพิมพ์ส่ง เช่น Kraft: นับแบงก์ + จำนวนลูกค้า) ---------- */
 const SH_NOTE = 'สรุปร้าน';
