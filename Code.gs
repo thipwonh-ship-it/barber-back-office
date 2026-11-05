@@ -72,7 +72,11 @@ function shops() {
   const rows = sh(SH_SET).getRange(S_ROW0, 1, S_ROWS, 12).getValues();
   return _M.shops = rows.filter(r => r[0]).map(r => ({ name: String(r[0]).trim(), method: String(r[1]).trim(), rate: num(r[2]), bonus: num(r[3]), lat: num(r[4]), lng: num(r[5]), radius: num(r[6]) || 150, open1: tStr(r[7]), open2: tStr(r[8]), close: tStr(r[9]), cash0: num(r[10]), cashFrom: dateKey(r[11]) }));
 }
-function tStr(v) { if (v instanceof Date) return hm(v); const m = /^(\d{1,2}):(\d{2})/.exec(String(v || '')); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : ''; }
+function tStr(v) {
+  if (v instanceof Date) return hm(v);
+  if (typeof v === 'number' && v >= 0) { const mins = Math.round((v % 1) * 1440) % 1440; return ('0' + Math.floor(mins / 60)).slice(-2) + ':' + ('0' + (mins % 60)).slice(-2); } // เวลาแบบเศษวันของ Sheets
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(v || '')); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : '';
+}
 function expenseTypes() { return sh(SH_SET).getRange('A60:A69').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
 function cashMethods() { return sh(SH_SET).getRange('D60:D61').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
 function takeReasons() { return sh(SH_SET).getRange('G60:G62').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
