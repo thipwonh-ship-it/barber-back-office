@@ -22,7 +22,7 @@ const SH_SET = 'ตั้งค่า', SH_TIME = 'ลงเวลา', SH_DAILY
 const B_ROW0 = 5, B_ROWS = 20, B_NAME = 1, B_SHOP = 2, B_MIN = 3, B_SSO = 4, B_DAILY = 5, B_PIN = 6, B_LINE = 7, B_START = 8, B_END = 9;
 // ร้าน A28:L30 (ชื่อ วิธีคิด อัตรา โบนัส lat lng รัศมี เปิดกะ1 เปิดกะ2 ปิด เงินสดตั้งต้น ตั้งแต่วันที่)
 const S_ROW0 = 28, S_ROWS = 3;
-// เป้าหัว A34:D57 · ประเภทรายจ่าย A60:A69 · วิธีเก็บเงินสด D60:D61 · เหตุผลหยิบเงินสด G60:G62 · ผู้เก็บเริ่มต้น B71 · Admin PIN B73
+// เป้าหัว A34:D57 · ประเภทรายจ่าย A60:A70 · วิธีเก็บเงินสด D60:D61 · เหตุผลหยิบเงินสด G60:G66 · ผู้เก็บเริ่มต้น B71 · Admin PIN B73
 const CELL_COLLECTOR = 'B71', CELL_ADMIN_PIN = 'B73';
 // ลงเวลา: A วันที่ B ช่าง C ร้าน D กะ E เข้า F ออก G สาย H สถานะ I หมายเหตุ J gpsเข้า K gpsออก L เดือน(สูตร)
 const T_DATE = 1, T_NAME = 2, T_SHOP = 3, T_SHIFT = 4, T_IN = 5, T_OUT = 6, T_LATE = 7, T_STATUS = 8, T_NOTE = 9, T_GPSIN = 10, T_GPSOUT = 11;
@@ -77,9 +77,9 @@ function tStr(v) {
   if (typeof v === 'number' && v >= 0) { const mins = Math.round((v % 1) * 1440) % 1440; return ('0' + Math.floor(mins / 60)).slice(-2) + ':' + ('0' + (mins % 60)).slice(-2); } // เวลาแบบเศษวันของ Sheets
   const m = /^(\d{1,2}):(\d{2})/.exec(String(v || '')); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : '';
 }
-function expenseTypes() { return sh(SH_SET).getRange('A60:A69').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
+function expenseTypes() { return sh(SH_SET).getRange('A60:A70').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
 function cashMethods() { return sh(SH_SET).getRange('D60:D61').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
-function takeReasons() { return sh(SH_SET).getRange('G60:G62').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
+function takeReasons() { return sh(SH_SET).getRange('G60:G66').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
 function defaultCollector() { return String(sh(SH_SET).getRange(CELL_COLLECTOR).getValue() || 'ดีน').trim(); }
 function adminPin() { return String(sh(SH_SET).getRange(CELL_ADMIN_PIN).getValue() || '').trim(); }
 function targets(ymStr) {

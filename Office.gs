@@ -78,7 +78,7 @@ function dailyGet(dateStr, shop) {
   const punched = timeRows(r => r.d === day && r.shop === shop).map(r => r.name);
   const rows = names.map(n => { const r = ex.find(e => e.name === n); const b = barberByName(n); return { name: n, main: b && b.shop === shop, punched: punched.includes(n), heads: r ? r.heads : '', sales: r ? r.sales : '', cash: r ? r.cash : '', transfer: r ? r.transfer : '', calc: r ? r.calc : '', over: r ? r.over : '', paid: r ? r.paid : '', note: r ? r.note : '', exists: !!r }; });
   rows.sort((a, b) => (b.main - a.main) || (b.punched - a.punched));
-  return { ok: true, date: day, shop, rows };
+  return { ok: true, date: day, shop, rows, cash: cashBalance()[shop] || null };
 }
 function dailySave(a, p) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
