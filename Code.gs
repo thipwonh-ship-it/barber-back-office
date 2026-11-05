@@ -115,8 +115,21 @@ function session(tok) { tok = String(tok || '').trim(); if (!/^lt:/.test(tok)) r
 function lineToken() { return prop('LINE_TOKEN'); }
 const MSG_SPLIT = '␞';
 function lineMsgs(text) { const out = []; String(text || '').split(MSG_SPLIT).forEach(t => { t = t.trim(); for (let i = 0; i < t.length && out.length < 5; i += 4900) out.push({ type: 'text', text: t.slice(i, i + 4900) }); }); return out.length ? out : [{ type: 'text', text: '-' }]; }
-function linePush(to, text, imgUrl) {
+/** โควตา push ที่เหลือเดือนนี้ (จาก LINE API, cache 10 นาที) — reply ไม่นับโควตา */
+function pushQuotaLeft() {
+  const cache = CacheService.getScriptCache(), v = cache.get('pushLeft'); if (v != null) return Number(v);
+  let left = 9999; try {
+    const h = { headers: { Authorization: 'Bearer ' + lineToken() }, muteHttpExceptions: true };
+    const q = JSON.parse(UrlFetchApp.fetch('https://api.line.me/v2/bot/message/quota', h).getContentText());
+    const u = JSON.parse(UrlFetchApp.fetch('https://api.line.me/v2/bot/message/quota/consumption', h).getContentText());
+    if (q.type === 'limited') left = Number(q.value) - Number(u.totalUsage || 0);
+  } catch (e) {}
+  cache.put('pushLeft', String(left), 600); return left;
+}
+/** critical = สลิปเงินเดือน/ปิดงวด → ส่งเสมอ · อื่นๆ งดเมื่อโควตาเหลือ < 20 (กันไว้ให้สลิปเงินเดือน) */
+function linePush(to, text, imgUrl, critical) {
   const tok = lineToken(); if (!tok || !to) return false;
+  if (!critical && pushQuotaLeft() < 20) return false;
   const msgs = lineMsgs(text).slice(0, 4); if (imgUrl) msgs.push({ type: 'image', originalContentUrl: imgUrl, previewImageUrl: imgUrl });
   try { const r = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', { method: 'post', contentType: 'application/json', headers: { Authorization: 'Bearer ' + tok }, payload: JSON.stringify({ to, messages: msgs }), muteHttpExceptions: true }); return r.getResponseCode() === 200; } catch (e) { return false; }
 }
@@ -124,11 +137,11 @@ function lineReply(replyToken, text) {
   const tok = lineToken(); if (!tok || !replyToken) return false;
   try { UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', { method: 'post', contentType: 'application/json', headers: { Authorization: 'Bearer ' + tok }, payload: JSON.stringify({ replyToken, messages: lineMsgs(text) }), muteHttpExceptions: true }); return true; } catch (e) { return false; }
 }
-function pushBarber(name, text, img) { const b = barberByName(name); return b && b.uid ? linePush(b.uid, text, img) : false; }
+function pushBarber(name, text, img, critical) { const b = barberByName(name); return b && b.uid ? linePush(b.uid, text, img, critical) : false; }
 /* แอดมิน: ADMINS = {uid: {name, role}} role = owner (ทิพย์) | office (ปิ๊ก) */
 function admins() { try { return JSON.parse(prop('ADMINS') || '{}'); } catch (e) { return {}; } }
 function adminRole(uid) { const a = admins()[String(uid || '')]; return a ? a.role : ''; }
-function pushAdmins(text, roles, img) { const a = admins(); Object.keys(a).forEach(uid => { if (!roles || roles.includes(a[uid].role)) linePush(uid, text, img); }); }
+function pushAdmins(text, roles, img, critical) { const a = admins(); Object.keys(a).forEach(uid => { if (!roles || roles.includes(a[uid].role)) linePush(uid, text, img, critical); }); }
 
 /* ---------- token จดจำเครื่อง (แอป Dashboard) ---------- */
 function adtHash(t) { return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, 'barber-adt:' + t, Utilities.Charset.UTF_8)); }
@@ -191,7 +204,7 @@ function apiJson(p) {
 function webhook(body) {
   (body.events || []).forEach(ev => {
     const src = ev.source || {}; if (src.type !== 'user') return;
-    if (ev.type === 'follow') { linePush(src.userId, 'สวัสดีค่ะ 👋 นี่คือระบบหลังบ้านร้านตัดผม\nช่าง: กดเมนู "ลงเวลา" ด้านล่าง แล้วใส่ PIN ที่ได้จากทิพย์ครั้งแรกครั้งเดียว\nพิมพ์ "คู่มือ" เพื่อดูวิธีใช้'); return; }
+    if (ev.type === 'follow') { lineReply(ev.replyToken, 'สวัสดีค่ะ 👋 นี่คือระบบหลังบ้านร้านตัดผม\nช่าง: กดเมนู "ลงเวลา" ด้านล่าง แล้วใส่ PIN ที่ได้จากทิพย์ครั้งแรกครั้งเดียว\nพิมพ์ "คู่มือ" เพื่อดูวิธีใช้'); return; }
     if (ev.type === 'message' && ev.message && ev.message.type === 'video') { if (barberByUid(src.userId)) lineReply(ev.replyToken, 'วิดีโอผลงานส่งในกลุ่มร้านนะคะ — แชทนี้รับเฉพาะรูปสลิปโอน'); return; }
     if (ev.type === 'message' && ev.message && ev.message.type === 'image') { let r = null; try { r = slipIntake(src.userId, ev.message.id, ev.message.imageSet || null); } catch (err) { r = '⚠️ บันทึกสลิปไม่สำเร็จ ลองส่งใหม่ (' + clean(err.message, 60) + ')'; } if (r) lineReply(ev.replyToken, r); return; }
     if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;

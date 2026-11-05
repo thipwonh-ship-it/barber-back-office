@@ -177,7 +177,7 @@ function closeMonth(ymStr) {
   let n = 0; Object.keys(byShop).forEach(sName => { if (exist.find(r => r.shop === sName)) return; const row = x.getLastRow() + 1; x.getRange(row, 1, 1, X_LINK).setValues([[last, sName, 'โบนัส', '', byShop[sName], 'โบนัสถึงเป้า ' + ymStr + ' (ปิดงวด)', 'ระบบ', '']]); x.getRange(row, X_FROM).setValue('โอน/ทิพย์'); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd'); n++; });
   addList('CLOSED_MONTHS', ymStr);
   const lines = pr.people.map(p => '• ' + p.name + ' สุทธิ ' + money(p.net) + (p.bonus ? ' (โบนัส ' + money(p.bonus) + ')' : ''));
-  pushAdmins('🔒 ปิดงวด ' + ymStr + ' แล้ว รวมจ่ายวันที่ 2 = ' + money(pr.total) + ' บาท\n' + lines.join('\n') + '\n\nโอนเสร็จแล้วกด "โอนแล้ว" ในแอป (แนบสลิปได้) หรือพิมพ์ "โอนแล้ว ' + ymStr + '" ในไลน์');
+  pushAdmins('🔒 ปิดงวด ' + ymStr + ' แล้ว รวมจ่ายวันที่ 2 = ' + money(pr.total) + ' บาท\n' + lines.join('\n') + '\n\nโอนเสร็จแล้วกด "โอนแล้ว" ในแอป (แนบสลิปได้) หรือพิมพ์ "โอนแล้ว ' + ymStr + '" ในไลน์', ['owner'], null, true);
   return { ok: true, msg: 'ปิดงวด ' + ymStr + ' แล้ว' + (n ? ' บันทึกโบนัส ' + n + ' ร้าน' : ''), data: payrollData(ymStr) };
 }
 /** โอนแล้ว: สร้างสลิป PDF ทุกคน → เก็บ Drive → ส่งไลน์ช่าง (+ รูปสลิปโอนถ้ามี) */
@@ -190,7 +190,7 @@ function confirmPaid(ymStr, slips) {
       const blob = slipPdfBlob(p, ymStr); const f = subFolder('สลิป ' + ymStr); const old = f.getFilesByName(blob.getName()); while (old.hasNext()) old.next().setTrashed(true); f.createFile(blob);
       let img = ''; const s = slips && slips[p.name]; if (s) { const r = saveImage(s, 'สลิป ' + ymStr, 'โอน ' + p.name, true); if (r) img = r.img; }
       const txt = '💰 สลิปเงินเดือน ' + ymStr + ' — ' + p.name + '\n' + slipLines(p.name, ymStr, p).join('\n') + '\n\nดู/ดาวน์โหลดสลิป PDF: https://liff.line.me/' + LIFF_ID() + '?mode=slip';
-      sent.push(p.name + (pushBarber(p.name, txt, img) ? ' ✓' : ' (ไม่มี LINE)'));
+      sent.push(p.name + (pushBarber(p.name, txt, img, true) ? ' ✓' : ' (ไม่มี LINE)'));
     } catch (e) { sent.push(p.name + ' ✗ ' + e.message); }
   });
   addList('PAID_MONTHS', ymStr);

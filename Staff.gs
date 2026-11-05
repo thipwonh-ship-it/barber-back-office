@@ -18,7 +18,7 @@ function bindLine(tok, pin) {
     if (b.uid && b.uid !== s.uid) return { ok: false, msg: 'ชื่อ ' + b.name + ' ผูกกับ LINE อื่นแล้ว ให้ทิพย์ลบ LINE userId ในแผ่น ตั้งค่า ก่อน' };
     sh(SH_SET).getRange(b.row, B_LINE).setValue(s.uid);
     try { sendManual(s.uid); } catch (e) {}
-    pushAdmins('👤 ' + b.name + ' ผูก LINE กับระบบแล้ว');
+    pushAdmins('👤 ' + b.name + ' ผูก LINE กับระบบแล้ว', ['owner']);
     return { ok: true, msg: 'ผูกบัญชีกับ ' + b.name + ' เรียบร้อย ต่อไปเปิดจากไลน์ได้เลย (ส่งคู่มือให้ในไลน์แล้ว)' };
   } finally { lock.releaseLock(); }
 }
@@ -57,7 +57,6 @@ function punch(tok, action, p) {
       t.getRange(row, 1, 1, T_GPSOUT).setValues([[today, b.name, shopName, shift.slice(0, 2), timeText, '', late, 'ทำงาน', (area === 'นอกพื้นที่' ? 'เข้างานนอกพื้นที่ ' + dist + ' ม.' : ''), gps, '']]);
       t.getRange(row, T_DATE).setNumberFormat('yyyy-mm-dd');
       const msg = 'บันทึกเข้างาน ' + shopName + ' ' + timeText + ' น.' + (late > 0 ? ' (สาย ' + late + ' นาที จากกะ ' + shift + ')' : ' ตรงเวลา 👍');
-      if (late > 0) pushAdmins('⏰ ' + b.name + ' เข้างาน ' + shopName + ' ' + timeText + ' สาย ' + late + ' นาที');
       return { ok: true, msg, late, today: todayStatus(b.name) };
     }
     if (action === 'out') {
@@ -82,7 +81,6 @@ function cashTake(tok, p) {
   const shopName = clean(p.shop || b.shop, 20); const today = todayBkk();
   const x = sh(SH_EXP); const row = x.getLastRow() + 1;
   x.getRange(row, 1, 1, X_LINK).setValues([[today, shopName, type, b.name, amt, detail || reason, b.name, '']]); x.getRange(row, X_FROM).setValue(CASH_FROM); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd');
-  pushAdmins('💵 ' + b.name + ' หยิบเงินสด ' + shopName + ' ' + money(amt) + ' บ. — ' + type + (detail ? ': ' + detail : ''));
   return { ok: true, msg: 'บันทึกแล้ว: ' + type + ' ' + money(amt) + ' บาท (' + shopName + ')' };
 }
 
@@ -97,8 +95,7 @@ function cashCollect(tok, p) {
   if (p.image) { const f = saveImage(p.image, 'เงินสด ' + ym(today), ymd(today) + ' ' + shopName + ' ' + money(amt), true); if (f) { link = f.url; img = f.img; } }
   const c = sh(SH_CASH); const row = c.getLastRow() + 1;
   c.getRange(row, 1, 1, C_LINK).setValues([[today, shopName, method, amt, who, b.name, link]]); c.getRange(row, C_DATE).setNumberFormat('yyyy-mm-dd');
-  pushAdmins('🏦 เก็บเงินสด ' + shopName + ' ' + money(amt) + ' บ. — ' + method + (isBank ? '' : ' โดย ' + who) + '\nบันทึกโดย ' + b.name + (link ? '\n' + link : ''), null, img || '');
-  return { ok: true, msg: 'บันทึกเก็บเงินสด ' + money(amt) + ' บาท (' + method + ') แล้ว แจ้งทิพย์เรียบร้อย' };
+  return { ok: true, msg: 'บันทึกเก็บเงินสด ' + money(amt) + ' บาท (' + method + ') แล้ว (ขึ้นในแอปแอดมินแล้ว)' };
 }
 
 /* ---------- สลิป / สรุปของฉัน ---------- */
