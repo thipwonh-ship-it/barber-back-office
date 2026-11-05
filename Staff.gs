@@ -145,20 +145,32 @@ function ocrText(blob) {
 }
 /** ปรับข้อความ OCR ภาษาไทย: ํา → ำ และตัดวรรณยุกต์ (OCR มักอ่านวรรณยุกต์หาย/เพี้ยน) ใช้สำหรับจับคำ */
 function thaiNorm(t) { return String(t || '').replace(/\u0E4D\u0E32/g, '\u0E33').replace(/[\u0E48-\u0E4B]/g, ''); }
-/** หายอดเงิน + เลขอ้างอิงจากข้อความสลิป */
+/** หายอดเงิน + เลขอ้างอิง + วันที่ จากข้อความสลิป (ทดสอบกับ OCR จริง: กสิกร, กรุงเทพ, SCB, กรุงไทย)
+ *  หมายเหตุ: หลายธนาคาร OCR แยก "ป้าย" กับ "ค่า" คนละบรรทัด จึงไม่ยึดตำแหน่งป้าย */
 function parseSlip(text) {
   const lines = thaiNorm(text).split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
-  const cut = l => l.split(/คาธรรมเนียม|ธรรมเนียม|fee/i)[0];            // ตัดส่วนค่าธรรมเนียมทิ้ง (อาจอยู่บรรทัดเดียวกับยอด)
-  const money = l => (cut(l).match(/\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2}/g) || []).map(v => Number(v.replace(/,/g, ''))).filter(x => x > 0);
+  const isFee = l => /คาธรรมเนียม|ธรรมเนียม|\bfee\b/i.test(l);
+  const money = l => (l.match(/\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2}/g) || []).map(v => Number(v.replace(/,/g, ''))).filter(x => x > 0 && x < 1000000);
+  // 1) ป้าย "จำนวน/Amount" ที่มีตัวเลขในบรรทัดเดียวกันหรือบรรทัดถัดไป (ถ้าบรรทัดถัดไปไม่ใช่ค่าธรรมเนียม)
   let amount = null;
   for (let i = 0; i < lines.length && amount == null; i++) {
-    if (/จำนวน|amount/i.test(cut(lines[i]))) { const v = money(lines[i]).concat(i + 1 < lines.length ? money(lines[i + 1]) : []); if (v.length) amount = v[0]; }
+    const l = lines[i].split(/คาธรรมเนียม|ธรรมเนียม|fee/i)[0];
+    if (!/จำนวน|นวนเงิน|amount/i.test(l)) continue;
+    let v = money(l); if (!v.length && i + 1 < lines.length && !isFee(lines[i + 1])) v = money(lines[i + 1]);
+    if (v.length) amount = v[0];
   }
-  if (amount == null) for (const l of lines) if (/บาท|thb|฿/i.test(cut(l))) { const v = money(l); if (v.length) { amount = v[0]; break; } }
-  if (amount == null) { const v = lines.flatMap(money).filter(x => x < 100000); if (v.length) amount = Math.max.apply(null, v); }
-  let ref = ''; const m = lines.join(' ').match(/(?:เลขทีรายการ|รหัสอางอิง|หมายเลขอางอิง|เลขทีอางอิง|Ref(?:erence)?(?:\s*No\.?)?|Transaction\s*(?:ID|No\.?))\s*[:：]?\s*([A-Za-z0-9]{8,})/i);
-  if (m) ref = m[1];
-  return { amount, ref };
+  // 2) ไม่เจอ → ยอดที่มากที่สุดในสลิป (ค่าธรรมเนียมเป็น 0.00 หรือน้อยกว่ายอดเสมอ)
+  if (amount == null) { const v = lines.filter(l => !isFee(l)).flatMap(money); if (v.length) amount = Math.max.apply(null, v); }
+  // เลขอ้างอิง = ตัวอักษร/ตัวเลขติดกันยาวที่สุด (≥10 ตัว มีเลข ≥6 ตัว) — เลขบัญชีถูกปิด xxx/มีขีด จึงไม่ถูกเลือก
+  const toks = lines.join(' ').split(/[\s:：]+/).filter(t => /^[A-Za-z0-9]{10,}$/.test(t) && (t.match(/\d/g) || []).length >= 6);
+  const ref = toks.sort((a, b) => b.length - a.length)[0] || '';
+  // วันที่บนสลิป (วัน + เดือน) เช่น "05 พ.ย. 2569", "5 พ.ย. 69", "05 Nov 26"
+  const TH = ['ม.ค', 'ก.พ', 'มี.ค', 'เม.ย', 'พ.ค', 'มิ.ย', 'ก.ค', 'ส.ค', 'ก.ย', 'ต.ค', 'พ.ย', 'ธ.ค'], EN = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  let date = null; const all = lines.join(' ');
+  const mt = all.match(/(\d{1,2})\s*(มี\s*\.?\s*ค|เม\s*\.?\s*ย|มิ\s*\.?\s*ย|[มกพสตธ]\s*\.\s*[คพยค])\s*\./);
+  if (mt) { const k = TH.indexOf(mt[2].replace(/\s/g, '').replace(/^(มี|เม|มิ)\.?/, '$1.')); if (k >= 0) date = { d: Number(mt[1]), m: k + 1 }; }
+  if (!date) { const me = all.match(/(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*,?\s*\d{2,4}/i); if (me) date = { d: Number(me[1]), m: EN.indexOf(me[2].toLowerCase()) + 1 }; }
+  return { amount, ref, date };
 }
 /** webhook: ช่างส่งรูปเข้าแชท → คืนข้อความตอบกลับ (หรือ null ถ้าไม่เกี่ยว) */
 function slipIntake(uid, msgId) {
@@ -179,11 +191,13 @@ function slipIntake(uid, msgId) {
     const looksSlip = /โอน|สำเร็จ|จำนวน|บาท|THB|ธนาคาร|ธ\.|พรอมเพย|PromptPay|Transfer|Amount|กสิกร|ไทยพาณิชย|กรุงเทพ|กรุงไทย|กรุงศรี|ออมสิน|ทหารไทย|ttb|K PLUS|SCB|Krungthai|Bangkok Bank|เลขทีรายการ|อางอิง/i.test(thaiNorm(text));
     if (text && !looksSlip && p.amount == null) return '🖼️ รูปนี้ไม่ใช่สลิปโอน — ไม่ได้บันทึก\n(รูป/วิดีโอผลงาน ส่งในกลุ่มร้านเหมือนเดิมนะคะ แชทนี้รับเฉพาะสลิป)';
     if (p.ref && all.find(x => x.ref === p.ref)) return '⚠️ สลิปนี้ส่งไปแล้ว (เลขอ้างอิง ' + p.ref + ' ซ้ำ) — ไม่ได้บันทึกซ้ำ';
+    const td = todayBkk(); const oldSlip = p.date && !(p.date.d === td.getDate() && p.date.m === td.getMonth() + 1);
+    const note = oldSlip ? 'สลิปลงวันที่ ' + p.date.d + '/' + p.date.m + ' ไม่ใช่วันนี้' : '';
     const f = subFolder('สลิปโอน ' + ym(now)).createFile(blob.setName(day + ' ' + shop + ' ' + b.name + ' ' + Utilities.formatDate(now, TZ, 'HHmmss') + '.jpg'));
     f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     const s = slipSheet(); const row = s.getLastRow() + 1;
-    s.getRange(row, 1, 1, 10).setValues([[parseYmd(day), b.name, shop, p.amount == null ? '' : p.amount, '', p.ref, hash, f.getUrl(), hm(now), '']]); s.getRange(row, 1).setNumberFormat('yyyy-mm-dd');
+    s.getRange(row, 1, 1, 10).setValues([[parseYmd(day), b.name, shop, p.amount == null ? '' : p.amount, '', p.ref, hash, f.getUrl(), hm(now), note]]); s.getRange(row, 1).setNumberFormat('yyyy-mm-dd');
     const mine = slipRows(x => x.d === day && x.name === b.name && x.shop === shop); const tot = mine.reduce((a, x) => a + (x.amount || 0), 0);
-    return (p.amount == null ? '📸 รับสลิปแล้ว แต่อ่านยอดไม่ได้ — ผู้จัดการจะตรวจเอง' : '✅ รับสลิป ' + money(p.amount) + ' บาท') + '\n' + shop + ' · ' + day + '\nวันนี้ส่งแล้ว ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท';
+    return (p.amount == null ? '📸 รับสลิปแล้ว แต่อ่านยอดไม่ได้ — ผู้จัดการจะตรวจเอง' : '✅ รับสลิป ' + money(p.amount) + ' บาท') + '\n' + shop + ' · ' + day + '\nวันนี้ส่งแล้ว ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท' + (oldSlip ? '\n⚠️ ' + note + ' — ผู้จัดการจะตรวจ' : '');
   } finally { lock.releaseLock(); }
 }
