@@ -208,6 +208,7 @@ function webhook(body) {
     if (/^(คู่มือ|manual|วิธีใช้)$/i.test(txt)) { sendManual(uid, rt); return; }
     if (/^(สถานะ|status)$/i.test(txt)) { lineReply(rt, statusText()); return; }
     if (/^(สลิป|slip)$/i.test(txt)) { lineReply(rt, 'เปิดสลิปเงินเดือน: https://liff.line.me/' + LIFF_ID() + '?mode=slip'); return; }
+    { let r = null; try { r = noteIntake(uid, txt); } catch (err) { r = '⚠️ บันทึกสรุปไม่สำเร็จ (' + clean(err.message, 60) + ')'; } if (r) { lineReply(rt, r); return; } }
     if (adminRole(uid)) lineReply(rt, 'คำสั่ง: คู่มือ · สถานะ · โอนแล้ว yyyy-MM · ล้างเครื่อง\nแอป Dashboard: ' + appUrl());
     else lineReply(rt, 'กดเมนูด้านล่างเพื่อใช้งาน หรือพิมพ์ "คู่มือ"');
   });

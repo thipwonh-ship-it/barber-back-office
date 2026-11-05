@@ -259,3 +259,45 @@ function slipJob() {
   const lock = LockService.getScriptLock(); lock.waitLock(30000);
   try { if (slipRows(x => x.note === SLIP_WAIT).length) ensureSlipJob(); } finally { lock.releaseLock(); }
 }
+
+/* ---------- สรุปร้าน (ข้อความที่ช่างพิมพ์ส่ง เช่น Kraft: นับแบงก์ + จำนวนลูกค้า) ---------- */
+const SH_NOTE = 'สรุปร้าน';
+function noteSheet() {
+  let s = ss().getSheetByName(SH_NOTE); if (s) return s;
+  s = ss().insertSheet(SH_NOTE); s.getRange('A1:K1').setValues([['วันที่', 'ช่าง', 'ร้าน', 'เงินสดนับได้', 'ลูกค้า (คน)', 'ข้อความ', 'เวลาส่ง', 'หมายเหตุ', 'ลูกค้าใหม่', 'ลูกค้าประจำ', 'ที่มาลูกค้าใหม่']]).setFontWeight('bold'); s.setFrozenRows(1); return s;
+}
+function noteRows(filter) {
+  const s = ss().getSheetByName(SH_NOTE); if (!s || s.getLastRow() < 2) return [];
+  return s.getRange(2, 1, s.getLastRow() - 1, 11).getValues().map((r, i) => ({ row: i + 2, d: dateKey(r[0]), name: String(r[1]).trim(), shop: String(r[2]).trim(), cash: r[3] === '' ? null : num(r[3]), customers: r[4] === '' ? null : num(r[4]), text: String(r[5] || ''), at: tStr(r[6]), note: String(r[7] || ''), newC: r[8] === '' ? null : num(r[8]), regC: r[9] === '' ? null : num(r[9]), sources: String(r[10] || '') })).filter(filter || (() => true));
+}
+/** อ่านข้อความสรุป: บรรทัด "แบงก์=ยอด" (1000=3000), "รวม3168", "ลูกค้า3คน" → null ถ้าไม่ใช่ข้อความสรุป */
+function parseShopNote(text) {
+  const t = String(text || ''), N = v => Number(String(v).replace(/,/g, ''));
+  const den = [...t.matchAll(/^\s*(\d{1,4})\s*[=xX×*]\s*([\d,]+)\s*$/gm)].map(m => ({ d: N(m[1]), v: N(m[2]) })).filter(x => [1, 2, 5, 10, 20, 50, 100, 500, 1000].includes(x.d));
+  const tot = t.match(/รวม\s*(?:เงิน(?:สด)?)?\s*[:=]?\s*([\d,]+)/);
+  const cus = t.match(/(?:ลูกค้า|หัว)\D{0,10}?(\d+)\s*(?:คน|หัว|ราย)/) || t.match(/(?:ลูกค้า|หัว)\s*[:=]?\s*(\d+)/);
+  // ลูกค้าแต่ละคน: "คนที่1ลูกค้าใหม่บ้านใกล้" / "คนที่2ลูกค้าประจำ" → ใหม่/ประจำ + ที่มา (ใช้วางแผนโปรโมท)
+  const list = [...t.matchAll(/^\s*คนที่\s*\d+\s*[.:)\-]?\s*(.+)$/gm)].map(m => m[1].trim());
+  const isNew = x => /ใหม่/.test(x), isReg = x => /ประจำ|เก่า|ขาประจำ/.test(x);
+  const src = list.filter(isNew).map(x => x.replace(/ลูกค้า|ใหม่|[-:,()]/g, ' ').replace(/\s+/g, ' ').trim() || 'ไม่ระบุ');
+  if (den.length < 2 && !tot && !cus && !list.length) return null;
+  const sum = den.length ? den.reduce((a, x) => a + x.v, 0) : null, written = tot ? N(tot[1]) : null;
+  const badLines = den.filter(x => x.v % x.d !== 0).map(x => x.d + '=' + x.v);
+  return { sum, written, cash: written != null ? written : sum, customers: cus ? N(cus[1]) : (list.length || null), newC: list.length ? list.filter(isNew).length : null, regC: list.length ? list.filter(isReg).length : null, sources: src, badLines, mismatch: sum != null && written != null && sum !== written };
+}
+/** webhook: ช่างพิมพ์สรุปร้าน → บันทึก (ส่งใหม่วันเดียวกัน = แทนของเดิม) */
+function noteIntake(uid, text) {
+  const b = barberByUid(uid); if (!b) return null;
+  const p = parseShopNote(text); if (!p) return null;
+  const now = new Date(), day = ymd(todayBkk());
+  const t = timeRows(r => r.d === day && r.name === b.name); const shop = t.length ? t[t.length - 1].shop : b.shop;
+  const warn = []; if (p.mismatch) warn.push('บวกแต่ละแบงก์ได้ ' + money(p.sum) + ' แต่เขียนรวม ' + money(p.written)); if (p.badLines.length) warn.push('บรรทัดแปลก: ' + p.badLines.join(', '));
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const s = noteSheet(), ex = noteRows(x => x.d === day && x.shop === shop)[0], row = ex ? ex.row : s.getLastRow() + 1;
+    if (p.customers != null && p.newC != null && p.newC + p.regC !== p.customers) warn.push('บอกลูกค้า ' + p.customers + ' คน แต่แยกรายคนได้ ' + (p.newC + p.regC) + ' คน');
+    s.getRange(row, 1, 1, 11).setValues([[parseYmd(day), b.name, shop, p.cash == null ? '' : p.cash, p.customers == null ? '' : p.customers, clean(text, 1500), hm(now), warn.join(' · '), p.newC == null ? '' : p.newC, p.regC == null ? '' : p.regC, p.sources.join(', ')]]); s.getRange(row, 1).setNumberFormat('yyyy-mm-dd');
+  } finally { lock.releaseLock(); }
+  return '📝 รับสรุปร้าน' + shop + ' ' + day + (p.cash != null ? '\n💵 เงินสดนับได้ ' + money(p.cash) + ' บาท' + (p.sum != null && !p.mismatch ? ' ✓' : '') : '') + (p.customers != null ? '\n👥 ลูกค้า ' + p.customers + ' คน' + (p.newC != null ? ' (ใหม่ ' + p.newC + ' · ประจำ ' + p.regC + ')' : '') : '') + (p.sources.length ? '\n📍 ลูกค้าใหม่มาจาก: ' + p.sources.join(', ') : '') +
+    (warn.length ? '\n⚠️ ' + warn.join('\n⚠️ ') + ' — เช็กแล้วส่งใหม่ได้เลย (ระบบใช้ข้อความล่าสุด)' : '');
+}

@@ -36,11 +36,11 @@ function gpsDist(v) { const m = /\((\d+) ม\.\)/.exec(String(v || '')); return 
 function timeRows(filter) { return rowsOf(SH_TIME, T_GPSOUT).map(r => ({ d: dateKey(r[0]), name: String(r[T_NAME - 1]).trim(), shop: String(r[T_SHOP - 1]).trim(), shift: String(r[T_SHIFT - 1]), tin: tStr(r[T_IN - 1]), tout: tStr(r[T_OUT - 1]), late: num(r[T_LATE - 1]), distIn: gpsDist(r[T_GPSIN - 1]), distOut: gpsDist(r[T_GPSOUT - 1]), status: String(r[T_STATUS - 1] || ''), note: String(r[T_NOTE - 1] || '') })).filter(x => x.d && (!filter || filter(x))); }
 
 /* ---------- เงินสดคงเหลือควรมี ต่อร้าน ---------- */
-function cashBalance() {
+function cashBalance(upTo) {
   const out = {}; const S = shops();
   const d = dailyRows(), x = expenseRows(), c = cashRows();
   S.forEach(s => {
-    const from = s.cashFrom || '0000-00-00'; const ge = r => r.shop === s.name && r.d >= from;
+    const from = s.cashFrom || '0000-00-00'; const ge = r => r.shop === s.name && r.d >= from && (!upTo || r.d <= upTo);
     const inCash = d.filter(ge).reduce((a, r) => a + r.cash, 0);
     const outCash = x.filter(r => ge(r) && r.from === CASH_FROM).reduce((a, r) => a + r.amt, 0);
     const coll = c.filter(ge).reduce((a, r) => a + r.amt, 0);
@@ -81,7 +81,7 @@ function dailyGet(dateStr, shop) {
   rows.sort((a, b) => (b.main - a.main) || (b.punched - a.punched));
   const sl = slipRows(x => x.d === day && x.shop === shop && slipCounted(x)), bk = slipRows(x => x.d === day && x.shop === shop && x.note === 'สมุด'), tips = expenseRows().filter(x => x.d === day && x.shop === shop && x.type === 'ทิปช่าง');
   rows.forEach(r => { const m = sl.filter(x => x.name === r.name); r.slips = m.map(x => ({ row: x.row, amount: x.amount, read: x.read, link: x.link, at: x.at, note: x.note })); r.tips = tips.filter(x => x.name === r.name).reduce((a, x) => a + x.amt, 0); });
-  return { ok: true, date: day, shop, rows, books: bk.map(x => ({ link: x.link, at: x.at, name: x.name })), cash: cashBalance()[shop] || null };
+  return { ok: true, date: day, shop, rows, books: bk.map(x => ({ link: x.link, at: x.at, name: x.name })), shopNote: noteRows(x => x.d === day && x.shop === shop)[0] || null, cashAt: (cashBalance(day)[shop] || {}).balance, cash: cashBalance()[shop] || null };
 }
 function dailySave(a, p) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
