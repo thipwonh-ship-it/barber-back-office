@@ -35,6 +35,7 @@ const C_DATE = 1, C_SHOP = 2, C_METHOD = 3, C_AMT = 4, C_WHO = 5, C_BY = 6, C_LI
 const CASH_FROM = 'เงินสดร้าน';
 const SESSION_HOURS = 6, ADT_DAYS = 90, ADT_MAX = 6;
 const FOLDER_NAME = 'Barber Back Office';
+const START_YM = '2026-11'; // เดือนแรกที่ใช้ระบบ — สลิปช่าง/โอนรายวัน เริ่มนับจากเดือนนี้
 
 // memo ต่อ 1 execution (ลดเวลา openById/อ่านแผ่นซ้ำ) — เรียก clearMemo() หลังแก้แผ่น ตั้งค่า
 const _M = {};
