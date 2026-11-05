@@ -193,7 +193,7 @@ function webhook(body) {
     const src = ev.source || {}; if (src.type !== 'user') return;
     if (ev.type === 'follow') { linePush(src.userId, 'สวัสดีค่ะ 👋 นี่คือระบบหลังบ้านร้านตัดผม\nช่าง: กดเมนู "ลงเวลา" ด้านล่าง แล้วใส่ PIN ที่ได้จากทิพย์ครั้งแรกครั้งเดียว\nพิมพ์ "คู่มือ" เพื่อดูวิธีใช้'); return; }
     if (ev.type === 'message' && ev.message && ev.message.type === 'video') { if (barberByUid(src.userId)) lineReply(ev.replyToken, 'วิดีโอผลงานส่งในกลุ่มร้านนะคะ — แชทนี้รับเฉพาะรูปสลิปโอน'); return; }
-    if (ev.type === 'message' && ev.message && ev.message.type === 'image') { let r = null; try { r = slipIntake(src.userId, ev.message.id); } catch (err) { r = '⚠️ บันทึกสลิปไม่สำเร็จ ลองส่งใหม่ (' + clean(err.message, 60) + ')'; } if (r) lineReply(ev.replyToken, r); return; }
+    if (ev.type === 'message' && ev.message && ev.message.type === 'image') { let r = null; try { r = slipIntake(src.userId, ev.message.id, ev.message.imageSet || null); } catch (err) { r = '⚠️ บันทึกสลิปไม่สำเร็จ ลองส่งใหม่ (' + clean(err.message, 60) + ')'; } if (r) lineReply(ev.replyToken, r); return; }
     if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;
     const txt = String(ev.message.text).trim(), uid = src.userId, rt = ev.replyToken;
     let m;

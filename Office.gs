@@ -79,7 +79,7 @@ function dailyGet(dateStr, shop) {
   const punched = timeRows(r => r.d === day && r.shop === shop).map(r => r.name);
   const rows = names.map(n => { const r = ex.find(e => e.name === n); const b = barberByName(n); return { name: n, main: b && b.shop === shop, punched: punched.includes(n), heads: r ? r.heads : '', sales: r ? r.sales : '', cash: r ? r.cash : '', transfer: r ? r.transfer : '', calc: r ? r.calc : '', over: r ? r.over : '', paid: r ? r.paid : '', note: r ? r.note : '', exists: !!r }; });
   rows.sort((a, b) => (b.main - a.main) || (b.punched - a.punched));
-  const sl = slipRows(x => x.d === day && x.shop === shop), tips = expenseRows().filter(x => x.d === day && x.shop === shop && x.type === 'ทิปช่าง');
+  const sl = slipRows(x => x.d === day && x.shop === shop && slipCounted(x)), tips = expenseRows().filter(x => x.d === day && x.shop === shop && x.type === 'ทิปช่าง');
   rows.forEach(r => { const m = sl.filter(x => x.name === r.name); r.slips = m.map(x => ({ row: x.row, amount: x.amount, read: x.read, link: x.link, at: x.at, note: x.note })); r.tips = tips.filter(x => x.name === r.name).reduce((a, x) => a + x.amt, 0); });
   return { ok: true, date: day, shop, rows, cash: cashBalance()[shop] || null };
 }
