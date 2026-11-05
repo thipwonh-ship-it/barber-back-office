@@ -162,8 +162,9 @@ function parseSlip(text) {
   // 2) ไม่เจอ → ยอดที่มากที่สุดในสลิป (ค่าธรรมเนียมเป็น 0.00 หรือน้อยกว่ายอดเสมอ)
   if (amount == null) { const v = lines.filter(l => !isFee(l)).flatMap(money); if (v.length) amount = Math.max.apply(null, v); }
   // เลขอ้างอิง = ตัวอักษร/ตัวเลขติดกันยาวที่สุด (≥10 ตัว มีเลข ≥6 ตัว) — เลขบัญชีถูกปิด xxx/มีขีด จึงไม่ถูกเลือก
-  const toks = lines.join(' ').split(/[\s:：]+/).filter(t => /^[A-Za-z0-9]{10,}$/.test(t) && (t.match(/\d/g) || []).length >= 6);
-  const ref = toks.sort((a, b) => b.length - a.length)[0] || '';
+  // บางธนาคาร (เช่น กรุงไทยจ่ายบิล) เลขอ้างอิงขึ้น 2 บรรทัด และบรรทัดแรกซ้ำกันทุกใบ → เก็บทุกเลขบนสลิปต่อกัน
+  const toks = [...new Set(lines.join(' ').split(/[\s:：]+/).filter(t => /^[A-Za-z0-9]{10,}$/.test(t) && (t.match(/\d/g) || []).length >= 6))];
+  const ref = toks.join(' ').slice(0, 120);
   // วันที่บนสลิป (วัน + เดือน) เช่น "05 พ.ย. 2569", "5 พ.ย. 69", "05 Nov 26"
   const TH = ['ม.ค', 'ก.พ', 'มี.ค', 'เม.ย', 'พ.ค', 'มิ.ย', 'ก.ค', 'ส.ค', 'ก.ย', 'ต.ค', 'พ.ย', 'ธ.ค'], EN = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   let date = null; const all = lines.join(' ');
@@ -175,7 +176,11 @@ function parseSlip(text) {
 /** สถานะสลิปในคอลัมน์หมายเหตุ: 'รออ่าน' = ยังไม่ได้ OCR · 'ซ้ำ…' / 'ไม่ใช่สลิป' = ไม่นับยอด */
 const SLIP_WAIT = 'รออ่าน';
 /** เลขอ้างอิงตรงกัน (เผื่อ OCR อ่านได้ไม่ครบ: ตัวหนึ่งเป็นท้ายของอีกตัว ยาว ≥10) */
-function sameRef(a, b) { a = String(a || ''); b = String(b || ''); if (!a || !b) return false; return a === b || (Math.min(a.length, b.length) >= 10 && (a.endsWith(b) || b.endsWith(a))); }
+function sameRef(a, b) { a = String(a || ''); b = String(b || ''); if (!a || !b) return false; if (a === b) return true;
+  if (a.includes(' ') || b.includes(' ')) return false;                       // หลายเลข → ต้องตรงทั้งหมด
+  return Math.min(a.length, b.length) >= 10 && (a.endsWith(b) || b.endsWith(a)); }
+/** สลิปซ้ำ = เลขอ้างอิงตรงกัน และยอดเงินเท่ากัน (กันการตัดยอดผิดเพราะเลขอ้างอิงคล้ายกัน) */
+function sameSlip(x, ref, amount) { return sameRef(x.ref, ref) && (x.read == null || amount == null || Number(x.read) === Number(amount)); }
 function slipCounted(x) { return !/^(ซ้ำ|ไม่ใช่สลิป|สมุด)/.test(x.note || ''); }
 const LOOKS_SLIP = /สำเร็จ|ธรรมเนียม|อางอิง|เลขทีรายการ|successful|Amount|THB|PromptPay|พรอมเพย|K ?PLUS|SCB|Krungthai|Bangkok Bank|กสิกร|ไทยพาณิชย|กรุงเทพ|กรุงไทย|กรุงศรี|ออมสิน|ttb|Make by KBank|MAKE/i;
 /** สลิป = มีคำเฉพาะของสลิปธนาคาร + (อ่านยอดได้ หรือ มีเลขอ้างอิง) — ไม่งั้นถือเป็นรูปสมุด/อื่นๆ */
@@ -247,7 +252,7 @@ function slipRead(row, blob) {
   const lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     if (!isSlipText(text, p)) { s.getRange(row, 10).setValue('สมุด'); return { st: 'book' }; }   // ไม่ใช่สลิป → เก็บเป็นรูปสมุดให้ผู้จัดการดูตอนกรอกยอด
-    if (p.ref && slipRows(x => x.row !== row && slipCounted(x) && sameRef(x.ref, p.ref)).length) { s.getRange(row, 4, 1, 7).setValues([[p.amount == null ? '' : p.amount, '', p.ref, s.getRange(row, 7).getValue(), s.getRange(row, 8).getValue(), s.getRange(row, 9).getValue(), 'ซ้ำ (เลขอ้างอิงเดียวกับสลิปเดิม)']]); return { st: 'dup', ref: p.ref, amount: p.amount }; }
+    if (p.ref && slipRows(x => x.row !== row && slipCounted(x) && sameSlip(x, p.ref, p.amount)).length) { s.getRange(row, 4, 1, 7).setValues([[p.amount == null ? '' : p.amount, '', p.ref, s.getRange(row, 7).getValue(), s.getRange(row, 8).getValue(), s.getRange(row, 9).getValue(), 'ซ้ำ (เลขอ้างอิงเดียวกับสลิปเดิม)']]); return { st: 'dup', ref: p.ref, amount: p.amount }; }
     const td = todayBkk(); const old = p.date && !(p.date.d === td.getDate() && p.date.m === td.getMonth() + 1);
     const note = old ? 'สลิปลงวันที่ ' + p.date.d + '/' + p.date.m + ' ไม่ใช่วันนี้' : '';
     s.getRange(row, 4).setValue(p.amount == null ? '' : p.amount); s.getRange(row, 6).setValue(p.ref); s.getRange(row, 10).setValue(note);
