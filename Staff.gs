@@ -118,3 +118,70 @@ function mySlipPdf(tok, ymStr) {
   const f = findSlipFile(b.name, ymStr); if (!f) return { ok: false, msg: 'ยังไม่มีไฟล์สลิป' };
   return { ok: true, name: f.getName(), b64: Utilities.base64Encode(f.getBlob().getBytes()) };
 }
+
+/* ---------- สลิปโอน: ช่างส่งรูปสลิปเข้าแชท OA → เก็บ Drive + อ่านยอด (OCR ฟรีของ Google Drive) ---------- */
+const SH_SLIP = 'สลิปโอน';
+// A วันที่ B ช่าง C ร้าน D ยอดที่อ่านได้ E ยอดที่แก้ F เลขอ้างอิง G hash H ลิงก์ I เวลาส่ง J หมายเหตุ
+function slipSheet() {
+  let s = ss().getSheetByName(SH_SLIP); if (s) return s;
+  s = ss().insertSheet(SH_SLIP); s.getRange('A1:J1').setValues([['วันที่', 'ช่าง', 'ร้าน', 'ยอดที่อ่านได้', 'ยอดที่แก้', 'เลขอ้างอิง', 'hash', 'ลิงก์สลิป', 'เวลาส่ง', 'หมายเหตุ']]).setFontWeight('bold'); s.setFrozenRows(1); return s;
+}
+function slipRows(filter) {
+  const s = ss().getSheetByName(SH_SLIP); if (!s || s.getLastRow() < 2) return [];
+  return s.getRange(2, 1, s.getLastRow() - 1, 10).getValues().map((r, i) => ({ row: i + 2, d: dateKey(r[0]), name: String(r[1]).trim(), shop: String(r[2]).trim(), read: r[3] === '' ? null : num(r[3]), fix: r[4] === '' ? null : num(r[4]), ref: String(r[5] || ''), hash: String(r[6] || ''), link: String(r[7] || ''), at: tStr(r[8]), note: String(r[9] || '') }))
+    .map(x => (x.amount = x.fix != null ? x.fix : x.read, x)).filter(filter || (() => true));
+}
+/** อ่านข้อความจากรูปด้วย OCR ของ Google Drive (แปลงเป็น Google Doc ชั่วคราวแล้วลบ) */
+function ocrText(blob) {
+  const tok = ScriptApp.getOAuthToken(), boundary = 'bboSlip' + Date.now();
+  const meta = JSON.stringify({ name: 'ocr-tmp', mimeType: 'application/vnd.google-apps.document' });
+  const pre = Utilities.newBlob('--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n--' + boundary + '\r\nContent-Type: ' + (blob.getContentType() || 'image/jpeg') + '\r\n\r\n').getBytes();
+  const post = Utilities.newBlob('\r\n--' + boundary + '--').getBytes();
+  const r = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&ocrLanguage=th&fields=id', { method: 'post', contentType: 'multipart/related; boundary=' + boundary, payload: pre.concat(blob.getBytes()).concat(post), headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true });
+  let id = ''; try { id = JSON.parse(r.getContentText()).id || ''; } catch (e) {} if (!id) return '';
+  const t = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + id + '/export?mimeType=text/plain', { headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true }).getContentText();
+  try { DriveApp.getFileById(id).setTrashed(true); } catch (e) {}
+  return t || '';
+}
+/** หายอดเงิน + เลขอ้างอิงจากข้อความสลิป */
+function parseSlip(text) {
+  const lines = String(text || '').split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const money = l => (l.match(/\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2}/g) || []).map(v => Number(v.replace(/,/g, '')));
+  const fee = l => /ธรรมเนียม|fee/i.test(l);
+  let amount = null;
+  for (let i = 0; i < lines.length && amount == null; i++) {
+    if (/จำนวน|amount/i.test(lines[i]) && !fee(lines[i])) { const v = money(lines[i]).concat(i + 1 < lines.length && !fee(lines[i + 1]) ? money(lines[i + 1]) : []).filter(x => x > 0); if (v.length) amount = v[0]; }
+  }
+  if (amount == null) for (const l of lines) if (/บาท|thb|฿/i.test(l) && !fee(l)) { const v = money(l).filter(x => x > 0); if (v.length) { amount = v[0]; break; } }
+  if (amount == null) { const v = lines.filter(l => !fee(l)).flatMap(money).filter(x => x > 0 && x < 100000); if (v.length) amount = Math.max.apply(null, v); }
+  let ref = ''; const m = String(text || '').replace(/\s+/g, ' ').match(/(?:เลขที่รายการ|รหัสอ้างอิง|หมายเลขอ้างอิง|เลขที่อ้างอิง|Ref(?:erence)?(?:\s*No\.?)?|Transaction\s*(?:ID|No\.?))\s*[:：]?\s*([A-Za-z0-9]{8,})/i);
+  if (m) ref = m[1];
+  return { amount, ref };
+}
+/** webhook: ช่างส่งรูปเข้าแชท → คืนข้อความตอบกลับ (หรือ null ถ้าไม่เกี่ยว) */
+function slipIntake(uid, msgId) {
+  const b = barberByUid(uid);
+  if (!b) return adminRole(uid) ? null : 'ส่งสลิปได้หลังผูกบัญชีช่าง — กดเมนู "ลงเวลา" แล้วใส่ PIN ก่อนค่ะ';
+  const tok = lineToken();
+  const res = UrlFetchApp.fetch('https://api-data.line.me/v2/bot/message/' + msgId + '/content', { headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) return '⚠️ ดึงรูปไม่ได้ ลองส่งใหม่อีกครั้ง';
+  const blob = res.getBlob(); const bytes = blob.getBytes();
+  const hash = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, bytes).map(x => ('0' + (x & 255).toString(16)).slice(-2)).join('');
+  const now = new Date(), day = ymd(todayBkk());
+  const t = timeRows(r => r.d === day && r.name === b.name); const shop = t.length ? t[t.length - 1].shop : b.shop;
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const all = slipRows();
+    if (all.find(x => x.hash === hash)) return '⚠️ สลิปนี้ส่งไปแล้ว (รูปซ้ำ) — ไม่ได้บันทึกซ้ำ';
+    const text = ocrText(blob.setName('slip.jpg')); const p = parseSlip(text);
+    const looksSlip = /โอน|สำเร็จ|จำนวน|บาท|THB|ธนาคาร|ธ\.|พร้อมเพย์|PromptPay|Transfer|Amount|กสิกร|ไทยพาณิชย์|กรุงเทพ|กรุงไทย|กรุงศรี|ออมสิน|ทหารไทย|ttb|K PLUS|SCB|Krungthai|Bangkok Bank|เลขที่รายการ|อ้างอิง/i.test(text);
+    if (text && !looksSlip && p.amount == null) return '🖼️ รูปนี้ไม่ใช่สลิปโอน — ไม่ได้บันทึก\n(รูป/วิดีโอผลงาน ส่งในกลุ่มร้านเหมือนเดิมนะคะ แชทนี้รับเฉพาะสลิป)';
+    if (p.ref && all.find(x => x.ref === p.ref)) return '⚠️ สลิปนี้ส่งไปแล้ว (เลขอ้างอิง ' + p.ref + ' ซ้ำ) — ไม่ได้บันทึกซ้ำ';
+    const f = subFolder('สลิปโอน ' + ym(now)).createFile(blob.setName(day + ' ' + shop + ' ' + b.name + ' ' + Utilities.formatDate(now, TZ, 'HHmmss') + '.jpg'));
+    f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    const s = slipSheet(); const row = s.getLastRow() + 1;
+    s.getRange(row, 1, 1, 10).setValues([[parseYmd(day), b.name, shop, p.amount == null ? '' : p.amount, '', p.ref, hash, f.getUrl(), hm(now), '']]); s.getRange(row, 1).setNumberFormat('yyyy-mm-dd');
+    const mine = slipRows(x => x.d === day && x.name === b.name && x.shop === shop); const tot = mine.reduce((a, x) => a + (x.amount || 0), 0);
+    return (p.amount == null ? '📸 รับสลิปแล้ว แต่อ่านยอดไม่ได้ — ผู้จัดการจะตรวจเอง' : '✅ รับสลิป ' + money(p.amount) + ' บาท') + '\n' + shop + ' · ' + day + '\nวันนี้ส่งแล้ว ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท';
+  } finally { lock.releaseLock(); }
+}

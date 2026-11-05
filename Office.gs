@@ -13,6 +13,7 @@ function officeApi(a, p) {
     case 'pond': return pondData();
     case 'pond_paid': return pondPaid(a, p);
     case 'pond_unpay': return pondUnpay(a, p);
+    case 'slip_fix': { const s = ss().getSheetByName(SH_SLIP); const row = num(p.row); if (!s || row < 2) return { ok: false, msg: 'ไม่พบสลิป' }; s.getRange(row, 5).setValue(p.amount === '' ? '' : num(p.amount)); s.getRange(row, 10).setValue('แก้โดย ' + a.name + ' ' + nowText()); return { ok: true, msg: 'แก้ยอดสลิปแล้ว', data: dailyGet(p.date, p.shop) }; }
     case 'payroll': return payrollData(p.ym);
     case 'target_set': { if (!owner) return deny(); if (!(num(p.val) > 0)) return { ok: false, msg: 'ใส่จำนวนหัวเป็นตัวเลข' }; const ok = setTarget(p.ym, p.shop, p.val); return ok ? { ok: true, msg: 'ตั้งเป้า ' + p.shop + ' ' + p.ym + ' = ' + num(p.val) + ' หัว' } : { ok: false, msg: 'ไม่พบเดือน ' + p.ym + ' หรือร้าน ' + p.shop + ' ในแผ่น ตั้งค่า (A33:D57)' }; }
     case 'close_month': if (!owner) return deny(); return closeMonth(p.ym);
@@ -78,6 +79,8 @@ function dailyGet(dateStr, shop) {
   const punched = timeRows(r => r.d === day && r.shop === shop).map(r => r.name);
   const rows = names.map(n => { const r = ex.find(e => e.name === n); const b = barberByName(n); return { name: n, main: b && b.shop === shop, punched: punched.includes(n), heads: r ? r.heads : '', sales: r ? r.sales : '', cash: r ? r.cash : '', transfer: r ? r.transfer : '', calc: r ? r.calc : '', over: r ? r.over : '', paid: r ? r.paid : '', note: r ? r.note : '', exists: !!r }; });
   rows.sort((a, b) => (b.main - a.main) || (b.punched - a.punched));
+  const sl = slipRows(x => x.d === day && x.shop === shop), tips = expenseRows().filter(x => x.d === day && x.shop === shop && x.type === 'ทิปช่าง');
+  rows.forEach(r => { const m = sl.filter(x => x.name === r.name); r.slips = m.map(x => ({ row: x.row, amount: x.amount, read: x.read, link: x.link, at: x.at })); r.tips = tips.filter(x => x.name === r.name).reduce((a, x) => a + x.amt, 0); });
   return { ok: true, date: day, shop, rows, cash: cashBalance()[shop] || null };
 }
 function dailySave(a, p) {
