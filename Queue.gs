@@ -167,7 +167,7 @@ function leaveSave(by, p, onlyBarber) {
     t.getRange(row, 1, vals.length, T_GPSOUT).setValues(vals); t.getRange(row, T_DATE, vals.length, 1).setNumberFormat('yyyy-mm-dd');
     const range = thDay(todo[0]) + (todo.length > 1 ? ' – ' + thDay(todo[todo.length - 1]) + ' (' + todo.length + ' วัน)' : '');
     return { ok: true, id: lid, msg: (onlyBarber ? '📝 ส่งคำขอ' : '🏖️ บันทึก') + reason + ' ' + name + ' ' + range + (onlyBarber ? ' — รอปิ๊กอนุมัติ' : '') + (skip.length ? '\nข้าม: ' + skip.join(', ') : '') + (qs.length ? '\n⚠️ คิวค้าง ' + qs.length + ' คิว ต้องย้าย' : ''),
-      share: (onlyBarber ? '📝 ขอลาหยุด #' : '🏖️ ลาหยุด #') + lid + '\n' + name + ' · ' + range + '\n' + reason + (p.note ? ' · ' + clean(p.note, 60) : '') + '\nลงโดย ' + by };
+      share: (onlyBarber ? (reason === 'ลาป่วย' ? '🤒 ขอลาป่วย #' : '📝 ขอลาหยุด #') : '🏖️ ลาหยุด #') + lid + '\n' + name + ' · ' + range + '\n' + reason + (p.note ? ' · ' + clean(p.note, 60) : '') + '\nลงโดย ' + by };
   } finally { lock.releaseLock(); }
 }
 function leaveCancel(by, lid, onlyBarber) {
@@ -218,16 +218,18 @@ function qReplyFor(id) {
   const b = qById(id); if (!b) return '❓ ไม่พบคิว #' + id;
   if (!b.sent) qSheet().getRange(b.row, 13).setValue(nowText());
   const when = thDay(b.d) + ' ' + b.start + '–' + b.end + ' (' + b.shop + ')';
-  if (b.status === 'ยกเลิก') return '🔓 ยกเลิกคิว #' + b.id + '\n' + b.name + ' ว่างแล้ว ' + when;
+  const who = '⟪' + b.name + '⟫'; // ⟪ชื่อ⟫ = แท็กช่างในกลุ่ม (mention → ช่างได้แจ้งเตือน)
+  if (b.status === 'ยกเลิก') return '🔓 ยกเลิกคิว #' + b.id + '\nช่าง ' + who + ' คิวลูกค้า ' + b.cust + ' ' + when + ' ยกเลิกแล้ว — ว่าง\n🙏 กรุณารับทราบ กดไลก์ข้อความนี้';
   if (b.status === 'มาแล้ว' || b.status === 'ไม่มา') return (b.status === 'มาแล้ว' ? '✓' : '✗') + ' #' + b.id + ' ' + b.name + ' · ' + b.cust + ' — ' + b.status;
-  return '🔒 ' + b.name + ' ไม่ว่าง ' + when + '\nลูกค้า: ' + b.cust + (b.phone ? ' ' + b.phone : '') + ' · ลงโดย ' + b.by + '\nคิว ' + b.name + ' วันนั้น: ' + qDayLine(b.name, b.d) + '\n⛔ ห้ามรับคิวทับช่วงนี้';
+  return '📌 ช่าง ' + who + ' มีคิว #' + b.id + '\nลูกค้า ' + b.cust + (b.phone ? ' ' + b.phone : '') + '\nเวลา ' + when + '\n🙏 กรุณารับทราบ กดไลก์ข้อความนี้';
 }
 function leaveReplyFor(lid) {
   const r = leaveRows(x => x.lid === lid);
   if (!r.length) { const rj = list('LV_REJECT').map(x => x.split(':')).find(x => x[0] === lid); return rj ? '❌ ไม่อนุมัติลา #' + lid + (rj[1] ? ' (' + rj[1] + ')' : '') + ' — มาทำงานตามปกติ จองคิวได้' : '↩️ ใบลา #' + lid + ' ถูกยกเลิกแล้ว — จองคิวได้ตามปกติ'; }
   const name = r[0].name, days = r.map(x => x.d).sort(); const qs = qRows(x => x.name === name && days.includes(x.d) && x.status === 'จอง');
-  if (!r[0].approved) return '📝 ' + name + ' ขอ' + (r[0].reason || 'ลา') + ' ' + days.map(thDay).join(', ') + '\n⏳ รอปิ๊กอนุมัติในแอป (ระหว่างนี้จองคิว ' + name + ' วันนั้นได้แต่จะมีคำเตือน)' + (qs.length ? '\n⚠️ มีคิวลูกค้าวันนั้น ' + qs.length + ' คิว' : '');
-  return '🚫 ' + name + ' ' + (r[0].reason || 'ลา') + ' ' + days.map(thDay).join(', ') + ' (อนุมัติแล้ว)\nวันนั้นจองคิว ' + name + ' ไม่ได้' + (qs.length ? '\n⚠️ คิวค้างต้องย้าย ' + qs.length + ' คิว:\n' + qs.map(x => '• #' + x.id + ' ' + thDay(x.d) + ' ' + x.start + ' ' + x.cust).join('\n') : '');
+  const qList = qs.length ? '\n⚠️ คิวลูกค้าที่ต้องย้าย ' + qs.length + ' คิว:\n' + qs.map(x => '• #' + x.id + ' ' + thDay(x.d) + ' ' + x.start + ' ' + x.cust + (x.phone ? ' ' + x.phone : '')).join('\n') : '';
+  if (!r[0].approved) return (r[0].reason === 'ลาป่วย' ? '🤒 ' : '📝 ') + name + ' ขอ' + (r[0].reason || 'ลา') + ' ' + days.map(thDay).join(', ') + '\n⏳ ⟪ปิ๊ก⟫ กรุณาอนุมัติในแอป (ระหว่างนี้จองคิว ' + name + ' ได้แต่จะมีคำเตือน)' + qList;
+  return '🚫 ⟪' + name + '⟫ ' + (r[0].reason || 'ลา') + ' ' + days.map(thDay).join(', ') + ' (อนุมัติแล้ว)\nวันนั้นจองคิว ' + name + ' ไม่ได้' + qList;
 }
 /** ช่างพิมพ์ "คิว" ในแชท OA → คิวของตัวเองวันนี้ + พรุ่งนี้ */
 function qMineText(name) { const d0 = ymd(todayBkk()); return [d0, addDays(d0, 1)].map(d => { const r = dayRoster(d).find(x => x.name === name) || {}; return '📅 ' + thDay(d) + (r.at ? ' · ' + r.at : '') + '\n' + (r.off ? '🏖️ ' + r.off : (r.pend ? '⏳ ' + r.pend + '\n' : '') + qDayLine(name, d)); }).join('\n\n'); }
@@ -255,5 +257,20 @@ function groupEvent(ev) {
   qs.slice(0, 3).forEach(x => parts.push(qReplyFor(x.slice(1).toUpperCase())));
   ls.slice(0, 2).forEach(x => parts.push(leaveReplyFor(x.slice(1).toUpperCase())));
   if (!parts.length && (m = /^คิว(?:\s+(.+))?$/.exec(txt))) parts.push(qBoardText(m[1]));
-  if (parts.length) lineReply(ev.replyToken, parts.join(MSG_SPLIT));
+  if (parts.length) lineReplyMsgs(ev.replyToken, parts.slice(0, 5).map(mentionMsg));
+}
+/** ข้อความที่มี ⟪ชื่อช่าง⟫ → textV2 แท็กช่างคนนั้น (ช่างที่ผูก LINE แล้ว) · ไม่มี → text ธรรมดา */
+function mentionMsg(t) {
+  const sub = {}; let k = 0;
+  const v2 = String(t).replace(/[{}]/g, '').replace(/⟪([^⟫]+)⟫/g, (all, nm) => { const uid = nm === 'ปิ๊ก' ? (Object.keys(admins()).find(u => admins()[u].role === 'office') || '') : ((barberByName(nm) || {}).uid || ''); if (!uid) return nm; const key = 'm' + (k++); sub[key] = { type: 'mention', mentionee: { type: 'user', userId: uid } }; return '{' + key + '}'; });
+  const plain = String(t).replace(/⟪([^⟫]+)⟫/g, '$1');
+  return k ? { type: 'textV2', text: v2.slice(0, 4900), substitution: sub, _plain: plain } : { type: 'text', text: plain.slice(0, 4900) };
+}
+/** reply หลายข้อความ · ถ้า textV2 ไม่ผ่าน ส่งแบบข้อความธรรมดาแทน (reply token ใช้ซ้ำได้เมื่อครั้งแรก error) */
+function lineReplyMsgs(replyToken, msgs) {
+  const tok = lineToken(); if (!tok || !replyToken || !msgs.length) return false;
+  const send = m => { try { return UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', { method: 'post', contentType: 'application/json', headers: { Authorization: 'Bearer ' + tok }, payload: JSON.stringify({ replyToken, messages: m }), muteHttpExceptions: true }).getResponseCode() === 200; } catch (e) { return false; } };
+  const clean_ = msgs.map(m => { const o = Object.assign({}, m); delete o._plain; return o; });
+  if (send(clean_)) return true;
+  return send(msgs.map(m => ({ type: 'text', text: m._plain || m.text })));
 }

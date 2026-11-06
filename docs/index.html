@@ -62,6 +62,7 @@
       <div class="chips" id="qDays"></div>
       <div id="qBody" class="mute">กำลังโหลด…</div>
       <div class="row"><button class="btn" style="font-size:16px;padding:13px" onclick="openBook()">+ ลงคิวลูกค้า</button><button class="btn sec" style="font-size:16px;padding:13px" onclick="openLeave()">🏖️ ขอลาหยุด</button></div>
+      <button class="btn warn" style="font-size:16px;padding:13px" onclick="sickToday()">🤒 ลาป่วยวันนี้</button>
       <div id="lvList"></div>
     </div>
     <div class="card">
@@ -233,6 +234,8 @@
     try{ const r=await run('leaveMe',TOK,{from:$('lFrom').value,to:$('lTo').value,reason:$('lReason').value,note:$('lNote').value,force:!!force}); $('lBtn').disabled=false;
       if(!r.ok){ if(r.needConfirm&&await ask(r.msg,'มีคิวลูกค้าวันนั้น')) return sendLeave(true); show('lMsg',r.msg,'err'); return; }
       close('leaveBox'); loadQ(); shareOpen(r.msg,r.share); }catch(e){ $('lBtn').disabled=false; show('lMsg','เชื่อมต่อไม่ได้','err'); } }
+  async function sickToday(){ const t=ymdL(new Date()); if(!await ask('ลาป่วยวันนี้ ('+new Date().toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short'})+')?\nระบบส่งคำขอให้ปิ๊กอนุมัติ และแจ้งคิวลูกค้าที่ต้องย้าย','🤒 ลาป่วยวันนี้')) return;
+    try{ const r=await run('leaveMe',TOK,{from:t,to:t,reason:'ลาป่วย',note:'ป่วย (กดจากปุ่มลาป่วย)',force:true}); if(!r.ok){ await ask(r.msg,'แจ้งเตือน',true); return; } loadQ(t); shareOpen(r.msg,r.share); }catch(e){ await ask('เชื่อมต่อไม่ได้','แจ้งเตือน',true); } }
   async function cancelLeave(id){ if(!await ask('ยกเลิกใบลา '+id+'?','ยกเลิกลา')) return; const r=await run('leaveCancelMe',TOK,id); if(!r.ok){ await ask(r.msg,'แจ้งเตือน',true); return; } loadQ(); shareOpen(r.msg,r.share); }
   start();
 </script>
