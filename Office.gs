@@ -94,13 +94,15 @@ function customerSummary(ymStr) {
 /* ---------- กรอกยอดรายวัน (ปิ๊ก) ---------- */
 function dailyGet(dateStr, shop) {
   const day = parseYmd(dateStr) ? dateStr : ymd(todayBkk()); const ex = dailyRows(r => r.d === day && r.shop === shop);
-  const names = barbers(false).map(b => b.name); ex.forEach(r => { if (!names.includes(r.name)) names.push(r.name); });
-  const punched = timeRows(r => r.d === day && r.shop === shop).map(r => r.name);
+  // แสดงเฉพาะช่างที่ลงเวลาเข้างานร้านนี้วันนั้น + คนที่มียอดกรอกไว้แล้ว · ช่างคนอื่น (ลืมลงเวลา) เพิ่มเองได้จาก others
+  const punched = timeRows(r => r.d === day && r.shop === shop && !!r.tin).map(r => r.name); // ไม่นับแถว ลา
+  const names = []; punched.concat(ex.map(r => r.name)).forEach(n => { if (!names.includes(n)) names.push(n); });
+  const others = barbers(false).map(b => b.name).filter(n => !names.includes(n));
   const rows = names.map(n => { const r = ex.find(e => e.name === n); const b = barberByName(n); return { name: n, main: b && b.shop === shop, punched: punched.includes(n), heads: r ? r.heads : '', sales: r ? r.sales : '', cash: r ? r.cash : '', transfer: r ? r.transfer : '', calc: r ? r.calc : '', over: r ? r.over : '', paid: r ? r.paid : '', note: r ? r.note : '', exists: !!r }; });
   rows.sort((a, b) => (b.main - a.main) || (b.punched - a.punched));
   const sl = slipRows(x => x.d === day && x.shop === shop && slipCounted(x)), bk = slipRows(x => x.d === day && x.shop === shop && x.note === 'สมุด'), tips = expenseRows().filter(x => x.d === day && x.shop === shop && x.type === 'ทิปช่าง');
   rows.forEach(r => { const m = sl.filter(x => x.name === r.name); r.slips = m.map(x => ({ row: x.row, amount: x.amount, read: x.read, link: x.link, at: x.at, note: x.note })); r.tips = tips.filter(x => x.name === r.name).reduce((a, x) => a + x.amt, 0); });
-  return { ok: true, date: day, shop, rows, books: bk.map(x => ({ link: x.link, at: x.at, name: x.name })), shopNote: noteRows(x => x.d === day && x.shop === shop)[0] || null, cashAt: (cashBalance(day)[shop] || {}).balance, cash: cashBalance()[shop] || null };
+  return { ok: true, date: day, shop, rows, others, books: bk.map(x => ({ link: x.link, at: x.at, name: x.name })), shopNote: noteRows(x => x.d === day && x.shop === shop)[0] || null, cashAt: (cashBalance(day)[shop] || {}).balance, cash: cashBalance()[shop] || null };
 }
 function dailySave(a, p) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
