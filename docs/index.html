@@ -93,6 +93,7 @@
   <div class="modal" id="leaveBox"><div class="card">
     <button class="x" onclick="close('leaveBox')">×</button><h2>🏖️ ขอลาหยุด</h2>
     <div class="mute">ส่งคำขอให้ปิ๊กอนุมัติ · อนุมัติแล้ววันนั้นจะจองคิวเราไม่ได้</div>
+    <div class="status" style="font-size:13px">📌 กติกา: แจ้งลาล่วงหน้า 7 วัน (ยกเว้นลาป่วย) · ทุกร้านต้องมีช่างอย่างน้อย 1 คน — วันที่เพื่อนหยุด เราหยุดไม่ได้ ต้องสลับกัน</div>
     <div class="row"><div><label>ตั้งแต่</label><input type="date" id="lFrom"></div><div><label>ถึง</label><input type="date" id="lTo"></div></div>
     <label>ประเภท</label><select id="lReason"></select>
     <label>เหตุผล</label><input id="lNote" placeholder="เช่น กลับบ้านต่างจังหวัด">
@@ -231,7 +232,7 @@
     show('bChk',r.msg,r.warn?'warn':'err'); if((r.suggest||[]).length) $('bChk').innerHTML=escH(r.msg)+'<div style="margin-top:6px">เวลาว่างใกล้สุด: '+r.suggest.map(t=>'<button class="chip" onclick="$(\'bTime\').value=\''+t+'\';bCheck()">'+t+'</button>').join(' ')+'</div>'; }
   async function sendBook(){ if(BST==='block') return; if(!$('bCust').value.trim()){ show('bMsg','ใส่ชื่อลูกค้า','err'); return; } $('bBtn').disabled=true; show('bMsg','กำลังบันทึก…','warn');
     try{ const p=bP(); p.force=BST==='warn'; const r=await run('qBook',TOK,p); $('bBtn').disabled=false; if(!r.ok){ show('bMsg',r.msg,'err'); bCheck(); return; } close('bookBox'); loadQ(p.date); shareOpen(r.msg,r.share); }catch(e){ $('bBtn').disabled=false; show('bMsg','เชื่อมต่อไม่ได้','err'); } }
-  function openLeave(){ const r=QD||{}; const t=addD(ymdL(new Date()),1); $('lFrom').value=t; $('lTo').value=t; $('lReason').innerHTML=(r.reasons||['ลากิจ','ลาป่วย','ลาพักร้อน','อื่นๆ']).map(x=>'<option>'+x+'</option>').join(''); $('lNote').value=''; $('lMsg').style.display='none'; open('leaveBox'); }
+  function openLeave(){ const r=QD||{}; const t=addD(ymdL(new Date()),7); $('lFrom').value=t; $('lTo').value=t; $('lReason').innerHTML=(r.reasons||['ลากิจ','ลาป่วย','ลาพักร้อน','อื่นๆ']).map(x=>'<option>'+x+'</option>').join(''); $('lNote').value=''; $('lMsg').style.display='none'; open('leaveBox'); }
   async function sendLeave(force){ $('lBtn').disabled=true; show('lMsg','กำลังส่ง…','warn');
     try{ const r=await run('leaveMe',TOK,{from:$('lFrom').value,to:$('lTo').value,reason:$('lReason').value,note:$('lNote').value,force:!!force}); $('lBtn').disabled=false;
       if(!r.ok){ if(r.needConfirm&&await ask(r.msg,'มีคิวลูกค้าวันนั้น')) return sendLeave(true); show('lMsg',r.msg,'err'); return; }

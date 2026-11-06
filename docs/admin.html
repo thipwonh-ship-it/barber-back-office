@@ -121,19 +121,19 @@ function renderQueue(el,d){
   const other=QS.date!==TODAY&&QS.date!==addD(TODAY,1);
   let h='<div class="card"><div class="chips">'+chip('วันนี้',TODAY)+chip('พรุ่งนี้',addD(TODAY,1))+'<span class="chip pick'+(other?' on':'')+'">📅 '+(other?esc(d.label):'เลือกวัน')+'<input type="date" value="'+d.date+'" onchange="if(this.value){QS.date=this.value;qReload()}"></span></div>';
   h+='<div class="seg">'+INIT.shops.map(s=>'<button class="'+(s===d.shop?'on':'')+'" onclick="QS.shop=\''+s+'\';qReload()">'+s+'</button>').join('')+'</div>';
-  h+='<div class="row"><button class="btn sec" onclick="qForm({})">+ จองคิว</button>'+(d.canLeave?'<button class="btn sec" onclick="lvForm()">🏖️ ลงลาให้ช่าง</button>':'')+'</div>';
+  h+='<div class="row"><button class="btn sec" onclick="qForm({})">+ จองคิว</button>'+(d.canLeave?'<button class="btn sec" onclick="lvForm()">🏖️ ลงลาให้ช่าง</button>':'')+'</div>'+(d.canLeave?'<button class="btn sec" style="width:100%" onclick="mvForm()">🔁 ย้ายร้าน (สลับช่าง/ฉุกเฉิน)</button>':'');
   if(d.unsent) h+='<div class="msg warn" style="display:block">📤 มี '+d.unsent+' คิวที่ยังไม่ได้ส่งเข้ากลุ่ม (ป้าย 📤 ในตาราง) — แตะคิวแล้วกดส่ง</div>';
   h+='</div>';
   // ลารออนุมัติ / ลาที่จะถึง
   const wait=(d.leaves||[]).filter(x=>!x.approved), ok=(d.leaves||[]).filter(x=>x.approved);
-  if(wait.length) h+='<div class="card" style="border-color:#6b5b2a"><h2>⏳ คำขอลารออนุมัติ ('+wait.length+')</h2>'+wait.map(x=>'<div class="dl"><div><b>'+esc(x.name)+'</b> · '+esc(x.reason)+' · '+esc(x.label)+(x.days.length>1?' ('+x.days.length+' วัน)':'')+'</div><div class="mute">'+esc((x.note.split('·')[3]||'').trim())+'</div>'+(d.canLeave?'<div class="row"><button class="btn ok" onclick="lvApprove(\''+x.id+'\',true)">✅ อนุมัติ</button><button class="btn sec" onclick="lvApprove(\''+x.id+'\',false)">❌ ไม่อนุมัติ</button></div>':'<div class="mute">รอปิ๊กอนุมัติ</div>')+'</div>').join('')+'</div>';
+  if(wait.length) h+='<div class="card" style="border-color:#6b5b2a"><h2>⏳ คำขอลารออนุมัติ ('+wait.length+')</h2>'+wait.map(x=>'<div class="dl"><div><b>'+esc(x.name)+'</b> · '+esc(x.reason)+' · '+esc(x.label)+(x.days.length>1?' ('+x.days.length+' วัน)':'')+'</div><div class="mute">'+esc((x.note.split('·')[3]||'').replace(/แจ้งล่วงหน้า.*/,'').trim())+'</div>'+(x.notice!=null&&x.notice<7&&x.reason!=='ลาป่วย'?'<div class="pill late">⚠️ แจ้งล่วงหน้า '+x.notice+' วัน (ต้อง 7 วัน)</div>':'')+(x.cover?'<div class="msg err" style="display:block;white-space:pre-line">⚠️ '+esc(x.cover)+'</div>':'')+(d.canLeave?'<div class="row"><button class="btn ok" onclick="lvApprove(\''+x.id+'\',true)">✅ อนุมัติ</button><button class="btn sec" onclick="lvApprove(\''+x.id+'\',false)">❌ ไม่อนุมัติ</button></div>':'<div class="mute">รอปิ๊กอนุมัติ</div>')+'</div>').join('')+'</div>';
   // ตาราง
   const o=tm(d.open), c=tm(d.close), R=(c-o)/10, B=d.barbers;
   h+='<div class="card"><h2>📅 '+esc(d.label)+' · '+esc(d.shop)+' <span class="mute">('+d.open+'–'+d.close+' · คิวละ '+d.dur+' นาที)</span></h2>';
   if(!B.length) h+='<div class="mute">วันนี้ไม่มีช่างประจำร้านนี้</div>';
   else {
     h+='<div class="qg" style="grid-template-columns:40px repeat('+B.length+',1fr);grid-template-rows:28px repeat('+R+',13px)">';
-    h+='<div></div>'+B.map((b,i)=>'<div class="qh" style="grid-column:'+(i+2)+'">'+esc(b.name)+(b.off?'<small>🏖️ '+esc(b.off)+'</small>':b.pend?'<small>⏳ รออนุมัติลา</small>':b.at!==d.shop?'<small>จาก '+esc(b.home)+'</small>':'')+'</div>').join('');
+    h+='<div></div>'+B.map((b,i)=>'<div class="qh" style="grid-column:'+(i+2)+'">'+esc(b.name)+(b.off?'<small>🏖️ '+esc(b.off)+'</small>':b.pend?'<small>⏳ รออนุมัติลา</small>':b.moved?'<small>🔁 ย้ายมาช่วย</small>':b.cover?'<small>แทนช่างที่หยุด</small>':b.at!==d.shop?'<small>จาก '+esc(b.home)+'</small>':'')+'</div>').join('');
     for(let r=0;r<R;r+=6) h+='<div class="qt" style="grid-row:'+(r+2)+'/span 6">'+fm(o+r*10)+'</div>';
     B.forEach((b,i)=>{ if(b.off){ h+='<div class="qoff" style="grid-column:'+(i+2)+';grid-row:2/span '+R+'">'+esc(b.off)+'<br>จองไม่ได้</div>'; return; }
       for(let r=0;r<R;r++) h+='<div class="qc'+(r%6===0?' hr':'')+'" style="grid-column:'+(i+2)+';grid-row:'+(r+2)+'" onclick="qForm({barber:\''+b.name+'\',time:\''+fm(o+r*10)+'\'})"></div>';
@@ -142,6 +142,7 @@ function renderQueue(el,d){
   }
   if((d.elsewhere||[]).length) h+='<div class="mute" style="margin-top:8px">ร้านอื่นวันนี้: '+d.elsewhere.map(x=>esc(x.name)+' ('+(x.off?'🏖️ '+esc(x.off):esc(x.at))+')').join(' · ')+'</div>';
   h+='</div>';
+  if((d.moves||[]).length) h+='<div class="card"><h2>🔁 ย้ายร้านที่จัดไว้</h2>'+d.moves.map(x=>'<div class="dl" style="display:flex;justify-content:space-between;align-items:center"><div><b>'+esc(x.name)+'</b> → '+esc(x.shop)+' · '+esc(x.label)+(x.from?' <span class="mute">(จาก '+esc(x.from)+')</span>':'')+'</div>'+(d.canLeave?'<button class="btn sec" style="margin:0;padding:5px 10px;font-size:13px" onclick="mvCancel(\''+x.id+'\')">ยกเลิก</button>':'')+'</div>').join('')+'</div>';
   if(ok.length) h+='<div class="card"><h2>🏖️ ลาที่อนุมัติแล้ว</h2>'+ok.map(x=>'<div class="dl" style="display:flex;justify-content:space-between;align-items:center"><div><b>'+esc(x.name)+'</b> · '+esc(x.reason)+' · '+esc(x.label)+'</div>'+(d.canLeave?'<button class="btn sec" style="margin:0;padding:5px 10px;font-size:13px" onclick="lvCancel(\''+x.id+'\')">ยกเลิกลา</button>':'')+'</div>').join('')+'</div>';
   el.innerHTML=h;
 }
@@ -189,8 +190,12 @@ function lvForm(){ const d=QS.d; let h='<h2>🏖️ ลงลาให้ช่�
 async function lvSave(force){ const p={api:'lv_save',barber:$('lvB').value,from:$('lvF').value,to:$('lvT').value,reason:$('lvR').value,note:$('lvN').value,force:!!force}; msg('lvMsg','กำลังบันทึก…','warn'); const r=await api(p);
   if(!r.ok){ if(r.needConfirm){ if(await confirmA(r.msg,'มีคิวลูกค้า')) return lvSave(true); msg('lvMsg','',''); return; } msg('lvMsg',r.msg,'err'); return; }
   modal('<h2>'+esc(r.msg)+'</h2>'+shareBtn(r.share)); qReload(); }
-async function lvApprove(id,ok){ let why=''; if(!ok){ why=await promptA('เหตุผลที่ไม่อนุมัติ (ส่งเข้ากลุ่ม)',''); if(why===null) return; } else if(!await confirmA('อนุมัติลา '+id+'?')) return;
-  const r=await api({api:'lv_approve',id,ok,why}); if(!r.ok){ alertA(r.msg); return; } modal('<h2>'+esc(r.msg)+'</h2><div class="mute">ส่งเข้ากลุ่มให้ช่างรู้ผล</div>'+shareBtn(r.share)); qReload(); }
+async function lvApprove(id,ok,force){ let why=''; if(!ok){ why=await promptA('เหตุผลที่ไม่อนุมัติ (ส่งเข้ากลุ่ม)',''); if(why===null) return; } else if(!force&&!await confirmA('อนุมัติลา '+id+'?')) return;
+  const r=await api({api:'lv_approve',id,ok,why,force:!!force}); if(!r.ok){ if(r.needConfirm){ if(await confirmA(r.msg,'ร้านจะขาดช่าง')) return lvApprove(id,ok,true); return; } alertA(r.msg); return; } modal('<h2>'+esc(r.msg)+'</h2><div class="mute">ส่งเข้ากลุ่มให้ช่างรู้ผล</div>'+shareBtn(r.share)); qReload(); }
+/* ย้ายร้าน (ปิ๊ก) */
+function mvForm(){ const d=QS.d; modal('<h2>🔁 ย้ายร้าน</h2><div class="mute">ย้ายช่างไปช่วยร้านอื่นวันนั้น — ใช้ตอนสลับวันหยุด/ฉุกเฉิน (ข้ามกลุ่มได้) · ระบบนับว่าร้านนั้นมีช่าง</div><label>ช่าง</label><select id="mvB">'+INIT.barbers.map(b=>'<option>'+esc(b.name)+'</option>').join('')+'</select><div class="row"><div><label>วันที่</label><input type="date" id="mvD" value="'+d.date+'"></div><div><label>ไปร้าน</label>'+shopSel('mvS',d.shop)+'</div></div><label>หมายเหตุ</label><input id="mvN" placeholder="เช่น แทน Pond ลาป่วย"><button class="btn" style="width:100%" onclick="mvSave()">บันทึก</button><div id="mvMsg" class="msg"></div>'); }
+async function mvSave(){ msg('mvMsg','กำลังบันทึก…','warn'); const r=await api({api:'mv_save',barber:$('mvB').value,date:$('mvD').value,shop:$('mvS').value,note:$('mvN').value}); if(!r.ok){ msg('mvMsg',r.msg,'err'); return; } modal('<h2 style="white-space:pre-line">'+esc(r.msg)+'</h2>'+shareBtn(r.share)); qReload(); }
+async function mvCancel(id){ if(!await confirmA('ยกเลิกการย้ายร้าน '+id+'?')) return; const r=await api({api:'mv_cancel',id}); if(!r.ok){ alertA(r.msg); return; } modal('<h2>'+esc(r.msg)+'</h2>'+shareBtn(r.share)); qReload(); }
 async function lvCancel(id){ if(!await confirmA('ยกเลิกใบลา '+id+'? ช่างจะกลับมาจองคิวได้')) return; const r=await api({api:'lv_cancel',id}); if(!r.ok){ alertA(r.msg); return; } modal('<h2>'+esc(r.msg)+'</h2>'+shareBtn(r.share)); qReload(); }
 
 /* ---------- กรอกยอด ---------- */

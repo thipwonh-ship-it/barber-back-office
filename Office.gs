@@ -20,18 +20,20 @@ function officeApi(a, p) {
     case 'paid': if (!owner) return deny(); return confirmPaid(p.ym, p.slips || {});
     case 'barber_save': if (!owner) return deny(); return barberSave(p);
     // ระบบคิว + ลาหยุด (Queue.gs) · อนุมัติลา = ผู้จัดการ (ปิ๊ก) เท่านั้น · Owner ดูอย่างเดียว
-    case 'q_save': case 'q_status': case 'lv_save': case 'lv_cancel': case 'lv_approve': a = Object.assign({}, a, { name: owner ? 'ทิพย์' : 'ปิ๊ก' }); break;
+    case 'q_save': case 'q_status': case 'lv_save': case 'lv_cancel': case 'lv_approve': case 'mv_save': case 'mv_cancel': a = Object.assign({}, a, { name: owner ? 'ทิพย์' : 'ปิ๊ก' }); break;
     default: break;
   }
   switch (p.api) {
-    case 'q_day': return Object.assign(qDay(p.date, p.shop || shops()[0].name), { leaves: leaveList(), canLeave: !owner });
+    case 'q_day': return Object.assign(qDay(p.date, p.shop || shops()[0].name), { leaves: leaveList(), moves: moveList(), canLeave: !owner });
     case 'q_check': return qCheck(p, p.id || '');
     case 'q_save': return qSave(a.name, p);
     case 'q_status': return qSetStatus(a.name, p.id, p.status);
     case 'q_cust': return qCust(p.phone);
     case 'lv_save': if (owner) return { ok: false, msg: 'ลาหยุดให้ปิ๊กเป็นคนลง/อนุมัติ' }; return leaveSave(a.name, p);
     case 'lv_cancel': if (owner) return { ok: false, msg: 'ลาหยุดให้ปิ๊กเป็นคนลง/อนุมัติ' }; return leaveCancel(a.name, p.id);
-    case 'lv_approve': if (owner) return { ok: false, msg: 'อนุมัติลาได้เฉพาะผู้จัดการ (ปิ๊ก)' }; return leaveApprove(a.name, p.id, !!p.ok, p.why);
+    case 'lv_approve': if (owner) return { ok: false, msg: 'อนุมัติลาได้เฉพาะผู้จัดการ (ปิ๊ก)' }; return leaveApprove(a.name, p.id, !!p.ok, p.why, !!p.force);
+    case 'mv_save': if (owner) return { ok: false, msg: 'ย้ายร้านให้ปิ๊กเป็นคนจัด' }; return moveSave(a.name, p);
+    case 'mv_cancel': if (owner) return { ok: false, msg: 'ย้ายร้านให้ปิ๊กเป็นคนจัด' }; return moveCancel(a.name, p.id);
     default: return { ok: false, msg: 'unknown api ' + p.api };
   }
 }

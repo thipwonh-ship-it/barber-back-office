@@ -11,6 +11,12 @@ const Q_ACTIVE = ['จอง', 'มาแล้ว'], Q_STATUS = ['จอง', '
 const Q_CHANNELS = ['โทร', 'LINE', 'Facebook', 'ช่างรับเอง', 'อื่นๆ'];
 const LEAVE_REASONS = ['ลากิจ', 'ลาป่วย', 'ลาพักร้อน', 'อื่นๆ'];
 const LV_OK = 'ลา', LV_WAIT = 'รออนุมัติลา', LV_ST = [LV_OK, LV_WAIT];
+const LV_NOTICE_DAYS = 7; // ลาอื่นๆ (ไม่ใช่ลาป่วย) ต้องแจ้งล่วงหน้า 7 วัน → น้อยกว่านี้มีคำเตือน
+const MV_ST = 'ย้ายร้าน'; // ปิ๊กย้ายช่างไปช่วยร้านอื่นวันนั้น (ฉุกเฉิน ข้ามกลุ่มได้)
+// กติกาสลับวันหยุด: ทุกร้านต้องมีช่างอย่างน้อย 1 คนทุกวัน
+//  • ราม+Kraft ใช้ Pond, M, Bow ร่วมกัน: Bow หยุด → M ไป Kraft (ร้านตามวัน) → วันนั้น Pond หยุดไม่ได้
+//  • โลตัส: Phoom, Leko หยุดพร้อมกันไม่ได้
+//  • ฉุกเฉิน: ปิ๊กย้ายช่างข้ามร้าน/ข้ามกลุ่มได้ → ระบบนับว่าร้านนั้นมีช่าง
 const WD = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
 const WD_FULL = { 'อาทิตย์': 0, 'จันทร์': 1, 'อังคาร': 2, 'พุธ': 3, 'พฤหัส': 4, 'พฤหัสบดี': 4, 'ศุกร์': 5, 'เสาร์': 6 };
 const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -31,7 +37,7 @@ function barberExtra() {
   const rows = sh(SH_SET).getRange(B_ROW0, 1, B_ROWS, 12).getValues(); const out = {};
   rows.forEach(r => { const nm = String(r[0]).trim(); if (!nm) return; const alt = {};
     String(r[11] || '').split(/[,;]+/).forEach(p => { const m = /^\s*([^=:]+)\s*[=:]\s*(.+?)\s*$/.exec(p); if (m) parseWd(m[1]).forEach(i => alt[i] = m[2]); });
-    out[nm] = { off: parseWd(r[10]), offText: String(r[10] || '').trim(), alt }; });
+    out[nm] = { off: parseWd(r[10]), offText: String(r[10] || '').trim(), alt, test: String(r[9] || '').trim() === 'ทดสอบ' }; });
   return _M.bex = out;
 }
 /** นาทีต่อคิวของร้าน (ตั้งค่า!M28:M30) — ว่าง = 40 (Kraft/ต่อหัว = 50) */
@@ -53,15 +59,37 @@ function lvReason(note) { return (/·\s*([^·]+?)\s*·/.exec(String(note || ''))
 function leaveRows(filter) { return timeRows(r => LV_ST.includes(r.status) && !r.tin).map(r => { const m = /#L(\d+)/.exec(r.note); return Object.assign(r, { lid: m ? 'L' + m[1] : '', reason: lvReason(r.note), approved: r.status === LV_OK }); }).filter(r => !filter || filter(r)); }
 
 /** สถานะช่างทุกคนในวันนั้น: อยู่ร้านไหน หยุด/ลาไหม */
-function dayRoster(dStr) {
+/** sim = {off: ชื่อที่สมมติว่าลา, pendOff: นับคนขอลารออนุมัติเป็นหยุด} — ใช้ตรวจว่าร้านจะขาดช่างไหม */
+function dayRoster(dStr, sim) {
   const wd = wdOf(dStr), ex = barberExtra(), t = timeRows(r => r.d === dStr);
-  return barbers(false).map(b => {
+  const list = barbers(false).map(b => {
     const e = ex[b.name] || { off: [], alt: {} };
-    const in_ = t.find(r => r.name === b.name && r.tin), lv = t.find(r => r.name === b.name && LV_ST.includes(r.status) && !r.tin);
-    const at = in_ ? in_.shop : (e.alt[wd] || b.shop);
-    let off = '', pend = ''; if (!in_) { if (lv && lv.status === LV_OK) off = lvReason(lv.note) || 'ลา'; else if (e.off.includes(wd)) off = 'หยุดประจำ'; if (!off && lv) pend = 'ขอ' + (lvReason(lv.note) || 'ลา') + ' (รออนุมัติ)'; }
-    return { name: b.name, home: b.shop, at, off, pend, punched: in_ ? in_.tin : '' };
+    const in_ = t.find(r => r.name === b.name && r.tin), lv = t.find(r => r.name === b.name && LV_ST.includes(r.status) && !r.tin), mv = t.find(r => r.name === b.name && r.status === MV_ST && !r.tin);
+    const at = in_ ? in_.shop : mv ? mv.shop : (e.alt[wd] || b.shop);
+    let off = '', pend = ''; if (!in_) { if (lv && lv.status === LV_OK) off = lvReason(lv.note) || 'ลา'; else if (e.off.includes(wd) && !mv) off = 'หยุดประจำ'; if (!off && lv) pend = 'ขอ' + (lvReason(lv.note) || 'ลา') + ' (รออนุมัติ)'; }
+    if (sim && !in_ && (b.name === sim.off || (sim.pendOff && pend))) { off = off || (b.name === sim.off ? 'ขอลา' : 'ขอลารออนุมัติ'); pend = ''; }
+    return { name: b.name, home: b.shop, at, off, pend, punched: in_ ? in_.tin : '', test: !!e.test, moved: !!mv, mvid: mv ? ((/#M\d+/.exec(mv.note) || [])[0] || '').slice(1) : '' };
   });
+  // ร้านไหนไม่มีช่าง → ช่างที่ตั้ง "ร้านตามวัน" ไว้เป็นร้านนั้น (M → Kraft) ไปแทน ถ้าร้านเดิมยังเหลือช่าง
+  shops().forEach(sp => {
+    const on = x => list.filter(r => r.at === x && !r.off && !r.test);
+    if (on(sp.name).length) return;
+    const c = list.find(r => !r.off && !r.punched && !r.moved && !r.test && r.at !== sp.name && on(r.at).length >= 2 && Object.values((ex[r.name] || {}).alt || {}).includes(sp.name));
+    if (c) { c.at = sp.name; c.cover = true; }
+  });
+  return list;
+}
+/** ถ้า name หยุดวันนั้น ทุกร้านยังมีช่างไหม (นับคนขอลารออนุมัติเป็นหยุด · นับช่างที่ปิ๊กย้ายมาช่วย) → null = ได้ · string = ร้านที่จะขาดช่าง */
+function coverIssue(dStr, name) {
+  const before = dayRoster(dStr, { pendOff: true }).filter(r => !r.test), after = dayRoster(dStr, { off: name, pendOff: true }).filter(r => !r.test);
+  const has = (l, sn) => l.some(r => r.at === sn && !r.off);
+  const empty = shops().map(s => s.name).filter(sn => !has(after, sn) && (has(before, sn) || before.some(r => r.name === name && r.at === sn)));
+  if (!empty.length) return null;
+  // แสดงเฉพาะช่างกลุ่มที่เกี่ยวข้อง (ร้านที่เชื่อมกันด้วยร้านหลัก/ร้านตามวัน เช่น ราม+Kraft)
+  const ex = barberExtra(), grp = new Set(empty); let grow = true;
+  while (grow) { grow = false; after.forEach(r => { const sh_ = [r.home].concat(Object.values((ex[r.name] || {}).alt || {})); if (sh_.some(x => grp.has(x))) sh_.forEach(x => { if (!grp.has(x)) { grp.add(x); grow = true; } }); }); }
+  const offs = after.filter(r => r.off && grp.has(r.home)).map(r => r.name + ' ' + r.off);
+  return thDay(dStr) + ' ร้าน ' + empty.join(', ') + ' จะไม่มีช่าง (หยุด: ' + offs.join(', ') + ')';
 }
 function shopHours(shopName) { const s = shops().find(x => x.name === shopName); return s ? { open: s.open1 || '10:00', close: s.close || '21:00' } : null; }
 
@@ -84,7 +112,7 @@ function qCheck(p, excludeId) {
   if (me.off) return { ok: false, block: true, msg: '⛔ ' + name + ' ' + me.off + ' ' + thDay(d) + ' — จองไม่ได้', others };
   const c = clash(name, s, e);
   if (c) return { ok: false, block: true, msg: '⛔ ' + name + ' มีคิว ' + c.start + '–' + c.end + ' แล้ว (' + (c.cust || '-') + (c.shop !== shop ? ' · ร้าน ' + c.shop : '') + ')', suggest: suggest(), others };
-  const warns = []; if (me.pend) warns.push(name + ' ' + me.pend + ' ' + thDay(d)); if (me.at !== shop) warns.push(thDay(d) + ' ' + name + ' ประจำร้าน ' + me.at);
+  const warns = []; if (me.pend) warns.push(name + ' ' + me.pend + ' ' + thDay(d)); if (me.at !== shop) warns.push(thDay(d) + ' ' + name + ' ประจำร้าน ' + me.at + (me.cover ? ' (ไปแทนช่างที่หยุด)' : me.moved ? ' (ปิ๊กย้ายไปช่วย)' : ''));
   if (warns.length && !p.force) return { ok: false, warn: true, msg: '⚠️ ' + warns.join('\n⚠️ ') + '\nยืนยันจองที่ร้าน ' + shop + '?', others };
   return { ok: true, start: fromMin(s), end: fromMin(e) };
 }
@@ -157,13 +185,21 @@ function leaveSave(by, p, onlyBarber) {
     const days = []; for (let d = from; d <= to && days.length < 31; d = addDays(d, 1)) days.push(d);
     const reason = LEAVE_REASONS.includes(p.reason) ? p.reason : 'ลากิจ';
     const had = timeRows(r => r.name === name && days.includes(r.d)); const skip = [];
-    const todo = days.filter(d => { const x = had.find(r => r.d === d); if (x) { skip.push(thDay(d) + (x.tin ? ' (เข้างานแล้ว)' : ' (ลาไว้แล้ว)')); return false; } return true; });
+    const todo = days.filter(d => { const x = had.find(r => r.d === d); if (x) { skip.push(thDay(d) + (x.tin ? ' (เข้างานแล้ว)' : x.status === MV_ST ? ' (ถูกย้ายไปช่วยร้าน ' + x.shop + ')' : ' (ลาไว้แล้ว)')); return false; } return true; });
     if (!todo.length) return { ok: false, msg: 'ไม่มีวันที่ลงได้: ' + skip.join(', ') };
     const qs = qRows(x => x.name === name && todo.includes(x.d) && x.status === 'จอง').sort((x, y) => (x.d + x.start) < (y.d + y.start) ? -1 : 1); const st = onlyBarber ? LV_WAIT : LV_OK;
-    if (qs.length && !p.force) return { ok: false, needConfirm: true, msg: '⚠️ ' + name + ' มีคิวลูกค้า ' + qs.length + ' คิวในวันลา:\n' + qs.map(x => '• ' + thDay(x.d) + ' ' + x.start + ' ' + x.cust).join('\n') + '\n\nลงลาต่อ? (ต้องย้ายคิวลูกค้า)' };
+    const sick = reason === 'ลาป่วย', lead = Math.round((parseYmd(todo[0]) - parseYmd(today)) / 86400000);
+    const cover = todo.map(d => coverIssue(d, name)).filter(Boolean);
+    // ช่างขอลา (ไม่ใช่ลาป่วย) วันที่ร้านจะไม่มีช่าง → บล็อก ต้องสลับวันหยุดกับเพื่อนก่อน · ลาป่วย/ปิ๊กลงให้ → เตือน
+    if (cover.length && onlyBarber && !sick) return { ok: false, msg: '⛔ ลาวันนี้ไม่ได้ — ร้านจะไม่มีช่าง\n' + cover.join('\n') + '\n\nต้องสลับวันหยุดกับเพื่อนก่อน (คุยกับปิ๊ก)' };
+    const warns = [];
+    if (!sick && lead < LV_NOTICE_DAYS) warns.push('⚠️ แจ้งล่วงหน้า ' + lead + ' วัน — การลาต้องแจ้งล่วงหน้า ' + LV_NOTICE_DAYS + ' วัน (ยกเว้นลาป่วย)');
+    if (cover.length) warns.push('⚠️ ' + cover.join('\n⚠️ ') + (onlyBarber ? '' : '\n→ ย้ายช่างไปช่วยได้ที่ปุ่ม 🔁 ย้ายร้าน'));
+    if (qs.length) warns.push('⚠️ ' + name + ' มีคิวลูกค้า ' + qs.length + ' คิวในวันลา:\n' + qs.map(x => '• ' + thDay(x.d) + ' ' + x.start + ' ' + x.cust).join('\n'));
+    if (warns.length && !p.force) return { ok: false, needConfirm: true, msg: warns.join('\n\n') + '\n\n' + (onlyBarber ? 'ยืนยันส่งคำขอ? (ปิ๊กอาจไม่อนุมัติ)' : 'ยืนยันลงลา?') };
     const lid = 'L' + seq('L_SEQ'); const ex = barberExtra()[name] || { alt: {} };
     const t = sh(SH_TIME); let row = t.getLastRow() + 1;
-    const vals = todo.map(d => [parseYmd(d), name, ex.alt[wdOf(d)] || b.shop, '', '', '', 0, st, '#' + lid + ' · ' + reason + ' · ลงโดย ' + by + (p.note ? ' · ' + clean(p.note, 60) : ''), '', '']);
+    const vals = todo.map(d => [parseYmd(d), name, ex.alt[wdOf(d)] || b.shop, '', '', '', 0, st, '#' + lid + ' · ' + reason + ' · ลงโดย ' + by + (p.note ? ' · ' + clean(p.note, 60) : '') + (sick ? '' : ' · แจ้งล่วงหน้า ' + lead + ' วัน'), '', '']);
     t.getRange(row, 1, vals.length, T_GPSOUT).setValues(vals); t.getRange(row, T_DATE, vals.length, 1).setNumberFormat('yyyy-mm-dd');
     const range = thDay(todo[0]) + (todo.length > 1 ? ' – ' + thDay(todo[todo.length - 1]) + ' (' + todo.length + ' วัน)' : '');
     return { ok: true, id: lid, msg: (onlyBarber ? '📝 ส่งคำขอ' : '🏖️ บันทึก') + reason + ' ' + name + ' ' + range + (onlyBarber ? ' — รอปิ๊กอนุมัติ' : '') + (skip.length ? '\nข้าม: ' + skip.join(', ') : '') + (qs.length ? '\n⚠️ คิวค้าง ' + qs.length + ' คิว ต้องย้าย' : ''),
@@ -182,8 +218,8 @@ function leaveCancel(by, lid, onlyBarber) {
     return { ok: true, msg: 'ยกเลิกใบลา ' + lid + ' ของ ' + name + ' แล้ว', share: '↩️ ยกเลิกลา #' + lid + '\n' + name + '\nลงโดย ' + by };
   } finally { lock.releaseLock(); }
 }
-/** ปิ๊ก อนุมัติ (ok=true) / ไม่อนุมัติ (ok=false → ลบแถว) */
-function leaveApprove(by, lid, ok, why) {
+/** ปิ๊ก อนุมัติ (ok=true) / ไม่อนุมัติ (ok=false → ลบแถว) · force = อนุมัติแม้ร้านจะขาดช่าง */
+function leaveApprove(by, lid, ok, why, force) {
   const lock = LockService.getScriptLock(); lock.waitLock(15000);
   try {
     lid = String(lid || '').toUpperCase(); const t = sh(SH_TIME); const n = t.getLastRow() - 1; if (n < 1) return { ok: false, msg: 'ไม่พบ' };
@@ -191,12 +227,47 @@ function leaveApprove(by, lid, ok, why) {
     v.forEach((r, i) => { if (String(r[T_STATUS - 1]) === LV_WAIT && !tStr(r[T_IN - 1]) && new RegExp('#' + lid + '(?!\\d)').test(String(r[T_NOTE - 1]))) { rows.push(i + 2); name = String(r[T_NAME - 1]).trim(); reason = lvReason(r[T_NOTE - 1]); days.push(dateKey(r[0])); } });
     if (!rows.length) return { ok: false, msg: 'ไม่พบคำขอลา ' + lid + ' ที่รออนุมัติ (อาจอนุมัติ/ยกเลิกไปแล้ว)' };
     days.sort(); const range = thDay(days[0]) + (days.length > 1 ? ' – ' + thDay(days[days.length - 1]) : '');
+    if (ok && !force) { const cv = days.map(d => coverIssue(d, name)).filter(Boolean); if (cv.length) return { ok: false, needConfirm: true, msg: '⚠️ ถ้าอนุมัติ:\n' + cv.join('\n') + '\n\nอนุมัติต่อ? (ต้องย้ายช่างไปช่วย — ปุ่ม 🔁 ย้ายร้าน)' }; }
     if (ok) { rows.forEach(r => { t.getRange(r, T_STATUS).setValue(LV_OK); const c = t.getRange(r, T_NOTE); c.setValue(String(c.getValue()) + ' · อนุมัติโดย ' + by + ' ' + nowText()); }); }
     else { rows.reverse().forEach(r => t.deleteRow(r)); const l = list('LV_REJECT').slice(-49); l.push(lid + ':' + clean(why, 40).replace(/[,:]/g, ' ')); P().setProperty('LV_REJECT', l.join(',')); }
     return { ok: true, msg: (ok ? '✅ อนุมัติ' : '❌ ไม่อนุมัติ') + reason + ' ' + name + ' ' + range, share: (ok ? '✅ อนุมัติลา #' : '❌ ไม่อนุมัติลา #') + lid + '\n' + name + ' · ' + range + (!ok && why ? '\nเหตุผล: ' + clean(why, 60) : '') + '\nโดย ' + by };
   } finally { lock.releaseLock(); }
 }
-function leaveList(name) { const today = ymd(todayBkk()); const r = leaveRows(x => x.d >= today && (!name || x.name === name)); const g = {}; r.forEach(x => { const k = x.lid || x.d + x.name; (g[k] = g[k] || { id: x.lid, name: x.name, reason: x.reason, approved: x.approved, note: x.note, days: [] }).days.push(x.d); }); return Object.values(g).map(x => Object.assign(x, { label: thDay(x.days[0]) + (x.days.length > 1 ? ' – ' + thDay(x.days[x.days.length - 1]) : '') })).sort((a, b) => a.days[0] < b.days[0] ? -1 : 1); }
+function leaveList(name) { const today = ymd(todayBkk()); const r = leaveRows(x => x.d >= today && (!name || x.name === name)); const g = {}; r.forEach(x => { const k = x.lid || x.d + x.name; (g[k] = g[k] || { id: x.lid, name: x.name, reason: x.reason, approved: x.approved, note: x.note, days: [] }).days.push(x.d); }); return Object.values(g).map(x => { const nt = (/แจ้งล่วงหน้า (-?\d+) วัน/.exec(x.note) || [])[1]; return Object.assign(x, { label: thDay(x.days[0]) + (x.days.length > 1 ? ' – ' + thDay(x.days[x.days.length - 1]) : ''), notice: nt == null ? null : +nt, cover: x.approved ? '' : x.days.map(d => coverIssue(d, x.name)).filter(Boolean).join('\n') }); }).sort((a, b) => a.days[0] < b.days[0] ? -1 : 1); }
+
+/* ---------- ย้ายร้าน (ปิ๊ก · ฉุกเฉิน/สลับข้ามกลุ่ม) ---------- */
+/** p = {barber, date, shop} → แถว ลงเวลา สถานะ "ย้ายร้าน" (ช่างกดเข้างานวันนั้น แถวนี้จะถูกแทนด้วยเวลาจริง) */
+function moveSave(by, p) {
+  const lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    clearMemo(); const name = String(p.barber || '').trim(), d = String(p.date || ''), shop = String(p.shop || '').trim();
+    if (!barberByName(name)) return { ok: false, msg: 'ไม่พบช่าง ' + name }; if (!parseYmd(d) || d < ymd(todayBkk())) return { ok: false, msg: 'เลือกวันที่' }; if (!shopHours(shop)) return { ok: false, msg: 'เลือกร้าน' };
+    const x = timeRows(r => r.d === d && r.name === name)[0];
+    if (x) return { ok: false, msg: name + ' ' + thDay(d) + (x.tin ? ' เข้างานแล้วที่ร้าน ' + x.shop : x.status === MV_ST ? ' ย้ายไปร้าน ' + x.shop + ' ไว้แล้ว (ยกเลิกก่อน)' : ' ' + x.status + ' อยู่') };
+    const me = dayRoster(d).find(r => r.name === name); if (me && me.at === shop) return { ok: false, msg: name + ' อยู่ร้าน ' + shop + ' วันนั้นอยู่แล้ว' };
+    const from = me ? me.at : '', id = 'M' + seq('M_SEQ');
+    const t = sh(SH_TIME); const row = t.getLastRow() + 1;
+    t.getRange(row, 1, 1, T_GPSOUT).setValues([[parseYmd(d), name, shop, '', '', '', 0, MV_ST, '#' + id + ' · จาก ' + from + ' · ลงโดย ' + by + (p.note ? ' · ' + clean(p.note, 60) : ''), '', '']]); t.getRange(row, T_DATE).setNumberFormat('yyyy-mm-dd');
+    clearMemo(); const left = coverIssue(d, '__none__');
+    return { ok: true, id, msg: '🔁 ย้าย ' + name + ' ไปร้าน ' + shop + ' ' + thDay(d) + (left ? '\n⚠️ ' + left : ''), share: '🔁 ย้ายร้าน #' + id + '\n' + name + ' → ' + shop + ' · ' + thDay(d) + '\nลงโดย ' + by };
+  } finally { lock.releaseLock(); }
+}
+function moveCancel(by, id) {
+  const lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    id = String(id || '').toUpperCase(); const t = sh(SH_TIME); const n = t.getLastRow() - 1; if (n < 1) return { ok: false, msg: 'ไม่พบ' };
+    const v = t.getRange(2, 1, n, T_GPSOUT).getValues(); let row = 0, name = '';
+    v.forEach((r, i) => { if (String(r[T_STATUS - 1]) === MV_ST && !tStr(r[T_IN - 1]) && new RegExp('#' + id + '(?!\\d)').test(String(r[T_NOTE - 1]))) { row = i + 2; name = String(r[T_NAME - 1]).trim(); } });
+    if (!row) return { ok: false, msg: 'ไม่พบการย้ายร้าน ' + id };
+    t.deleteRow(row);
+    return { ok: true, msg: 'ยกเลิกย้ายร้าน ' + id + ' (' + name + ') แล้ว', share: '↩️ ยกเลิกย้ายร้าน #' + id + '\n' + name + '\nลงโดย ' + by };
+  } finally { lock.releaseLock(); }
+}
+function moveList() { const today = ymd(todayBkk()); return timeRows(r => r.status === MV_ST && !r.tin && r.d >= today).map(r => ({ id: ((/#M\d+/.exec(r.note) || [])[0] || '').slice(1), name: r.name, shop: r.shop, d: r.d, label: thDay(r.d), from: (/จาก\s*([^·]+?)\s*·/.exec(r.note) || [])[1] || '' })).sort((a, b) => a.d < b.d ? -1 : 1); }
+function moveReplyFor(id) {
+  const m = moveList().find(x => x.id === id); if (!m) return '↩️ ยกเลิกย้ายร้าน #' + id + ' แล้ว';
+  return '🔁 ช่าง ⟪' + m.name + '⟫ ' + m.label + ' ไปช่วยร้าน ' + m.shop + (m.from ? ' (แทนที่ร้าน ' + m.from + ')' : '') + '\n🙏 กรุณารับทราบ กดไลก์ข้อความนี้';
+}
 
 /* ---------- ฝั่งช่าง (Staff API) ---------- */
 function qMyDay(tok, dStr) {
@@ -223,12 +294,14 @@ function qReplyFor(id) {
   if (b.status === 'มาแล้ว' || b.status === 'ไม่มา') return (b.status === 'มาแล้ว' ? '✓' : '✗') + ' #' + b.id + ' ' + b.name + ' · ' + b.cust + ' — ' + b.status;
   return '📌 ช่าง ' + who + ' มีคิว #' + b.id + '\nลูกค้า ' + b.cust + (b.phone ? ' ' + b.phone : '') + '\nเวลา ' + when + '\n🙏 กรุณารับทราบ กดไลก์ข้อความนี้';
 }
+/** คำเตือนของใบลา: แจ้งล่วงหน้าไม่ถึง 7 วัน · ร้านจะขาดช่าง */
+function lvFlags(r, name, days) { const nt = (/แจ้งล่วงหน้า (-?\d+) วัน/.exec(r.note) || [])[1]; const cv = days.map(d => coverIssue(d, name)).filter(Boolean); return (nt != null && +nt < LV_NOTICE_DAYS ? '\n⚠️ แจ้งล่วงหน้า ' + nt + ' วัน (ต้อง ' + LV_NOTICE_DAYS + ' วัน)' : '') + (cv.length ? '\n⚠️ ' + cv.join('\n⚠️ ') : ''); }
 function leaveReplyFor(lid) {
   const r = leaveRows(x => x.lid === lid);
   if (!r.length) { const rj = list('LV_REJECT').map(x => x.split(':')).find(x => x[0] === lid); return rj ? '❌ ไม่อนุมัติลา #' + lid + (rj[1] ? ' (' + rj[1] + ')' : '') + ' — มาทำงานตามปกติ จองคิวได้' : '↩️ ใบลา #' + lid + ' ถูกยกเลิกแล้ว — จองคิวได้ตามปกติ'; }
   const name = r[0].name, days = r.map(x => x.d).sort(); const qs = qRows(x => x.name === name && days.includes(x.d) && x.status === 'จอง');
   const qList = qs.length ? '\n⚠️ คิวลูกค้าที่ต้องย้าย ' + qs.length + ' คิว:\n' + qs.map(x => '• #' + x.id + ' ' + thDay(x.d) + ' ' + x.start + ' ' + x.cust + (x.phone ? ' ' + x.phone : '')).join('\n') : '';
-  if (!r[0].approved) return (r[0].reason === 'ลาป่วย' ? '🤒 ' : '📝 ') + name + ' ขอ' + (r[0].reason || 'ลา') + ' ' + days.map(thDay).join(', ') + '\n⏳ ⟪ปิ๊ก⟫ กรุณาอนุมัติในแอป (ระหว่างนี้จองคิว ' + name + ' ได้แต่จะมีคำเตือน)' + qList;
+  if (!r[0].approved) return (r[0].reason === 'ลาป่วย' ? '🤒 ' : '📝 ') + name + ' ขอ' + (r[0].reason || 'ลา') + ' ' + days.map(thDay).join(', ') + '\n⏳ ⟪ปิ๊ก⟫ กรุณาอนุมัติในแอป (ระหว่างนี้จองคิว ' + name + ' ได้แต่จะมีคำเตือน)' + lvFlags(r[0], name, days) + qList;
   return '🚫 ⟪' + name + '⟫ ' + (r[0].reason || 'ลา') + ' ' + days.map(thDay).join(', ') + ' (อนุมัติแล้ว)\nวันนั้นจองคิว ' + name + ' ไม่ได้' + qList;
 }
 /** ช่างพิมพ์ "คิว" ในแชท OA → คิวของตัวเองวันนี้ + พรุ่งนี้ */
@@ -256,6 +329,7 @@ function groupEvent(ev) {
   const qs = txt.match(/#Q\d+/gi) || [], ls = txt.match(/#L\d+/gi) || [];
   qs.slice(0, 3).forEach(x => parts.push(qReplyFor(x.slice(1).toUpperCase())));
   ls.slice(0, 2).forEach(x => parts.push(leaveReplyFor(x.slice(1).toUpperCase())));
+  (txt.match(/#M\d+/gi) || []).slice(0, 2).forEach(x => parts.push(moveReplyFor(x.slice(1).toUpperCase())));
   if (!parts.length && (m = /^คิว(?:\s+(.+))?$/.exec(txt))) parts.push(qBoardText(m[1]));
   if (parts.length) lineReplyMsgs(ev.replyToken, parts.slice(0, 5).map(mentionMsg));
 }
