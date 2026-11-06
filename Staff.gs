@@ -104,7 +104,7 @@ function mySummary(tok, ymStr) {
   ymStr = /^\d{4}-\d{2}$/.test(ymStr || '') ? ymStr : ym(todayBkk());
   if (ymStr < START_YM) return { ok: false, msg: 'ดูได้ตั้งแต่เดือน ' + START_YM };
   const rows = sh(SH_DAILY).getRange(2, 1, Math.max(sh(SH_DAILY).getLastRow() - 1, 1), D_BY).getValues().filter(r => String(r[D_NAME - 1]).trim() === b.name && dateKey(r[0]).slice(0, 7) === ymStr);
-  const days = rows.map(r => ({ d: dateKey(r[0]), shop: r[D_SHOP - 1], heads: num(r[D_HEADS - 1]), sales: num(r[D_SALES - 1]), wage: num(r[D_PAID - 1]) }));
+  const days = rows.map(r => ({ d: dateKey(r[0]), shop: r[D_SHOP - 1], heads: num(r[D_HEADS - 1]), sales: num(r[D_SALES - 1]), wage: num(r[D_PAID - 1]) })).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0); // หน้าเว็บช่างกลับลำดับ → ล่าสุดอยู่บน
   const late = sh(SH_TIME).getRange(2, 1, Math.max(sh(SH_TIME).getLastRow() - 1, 1), T_LATE).getValues().filter(r => String(r[T_NAME - 1]).trim() === b.name && dateKey(r[0]).slice(0, 7) === ymStr && num(r[T_LATE - 1]) > 0).length;
   const paid = (prop('PAID_MONTHS') || '').split(',').includes(ymStr);
   return { ok: true, name: b.name, ym: ymStr, days, heads: days.reduce((a, x) => a + x.heads, 0), sales: days.reduce((a, x) => a + x.sales, 0), wage: days.reduce((a, x) => a + x.wage, 0), late, paid, slip: paid ? slipLines(b.name, ymStr) : null };

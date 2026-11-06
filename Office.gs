@@ -9,7 +9,7 @@ function officeApi(a, p) {
     case 'daily_save': return dailySave(a, p);
     case 'expense_add': return expenseAdd(a, p);
     case 'expense_list': return { ok: true, rows: byDateDesc(expenseRows(p.ym)).slice(0, 200) };
-    case 'cash_list': return { ok: true, rows: cashRows(p.ym).reverse(), balance: cashBalance() };
+    case 'cash_list': return { ok: true, rows: byDateDesc(cashRows(p.ym)), balance: cashBalance() };
     case 'pond': return pondData();
     case 'pond_paid': return pondPaid(a, p);
     case 'pond_unpay': return pondUnpay(a, p);
@@ -59,7 +59,7 @@ function todayData(dateStr) {
   const punched = t.map(r => r.name); const notYet = act.filter(b => !punched.includes(b.name)).map(b => b.name);
   const ymStr = day.slice(0, 7); const tg = targets(ymStr); const md = dailyRows(r => r.d.slice(0, 7) === ymStr);
   const mtd = S.map(s => ({ shop: s, heads: md.filter(r => r.shop === s).reduce((a, r) => a + r.heads, 0), target: tg[s] || 0, sales: md.filter(r => r.shop === s).reduce((a, r) => a + r.sales, 0) }));
-  return { ok: true, date: day, byShop, notYet, mtd, cash: cashBalance(), pond: pondData().today, recent: expenseRows(ymStr).slice(-8).reverse().concat(), lastCollect: cashRows().slice(-3).reverse() };
+  return { ok: true, date: day, byShop, notYet, mtd, cash: cashBalance(), pond: pondData().today, recent: byDateDesc(expenseRows(ymStr)).slice(0, 8), lastCollect: byDateDesc(cashRows()).slice(0, 3), perBarber: d.map(r => ({ name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid })).sort((a, b) => S.indexOf(a.shop) - S.indexOf(b.shop) || (a.name < b.name ? -1 : 1)) };
 }
 
 /* ---------- รายเดือน ---------- */
@@ -71,11 +71,11 @@ function monthData(ymStr, who) {
   t.forEach(r => { if (r.late > 0 && perBarber[r.name]) { perBarber[r.name].late++; perBarber[r.name].lateMin += r.late; } });
   const paidSet = {}; dailyPayRows().forEach(x => paidSet[x.name + '|' + x.forDate] = x.paidOn);
   const dailyNames = barbers(true).filter(b => b.daily).map(b => b.name);
-  const perDay = d.slice().sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : a.name < b.name ? -1 : 1).map(r => ({ d: r.d, name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid, daily: dailyNames.includes(r.name), paidOn: paidSet[r.name + '|' + r.d] || '' }));
+  const perDay = d.slice().sort((a, b) => a.d < b.d ? 1 : a.d > b.d ? -1 : a.name < b.name ? -1 : 1).map(r => ({ d: r.d, name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid, daily: dailyNames.includes(r.name), paidOn: paidSet[r.name + '|' + r.d] || '' }));
   const tg = targets(ymStr);
   const byShop = S.map(s => { const rows = d.filter(r => r.shop === s); const ex = x.filter(r => r.shop === s && r.type !== 'เบิกช่าง'); const byType = {}; ex.forEach(r => byType[r.type] = (byType[r.type] || 0) + r.amt); const sales = rows.reduce((a, r) => a + r.sales, 0), wage = rows.reduce((a, r) => a + r.paid, 0), exp = ex.reduce((a, r) => a + r.amt, 0); return { shop: s, heads: rows.reduce((a, r) => a + r.heads, 0), target: tg[s] || 0, sales, wage, expenses: byType, expTotal: exp, profit: sales - wage - exp }; });
   const customers = who && who.role === 'owner' ? customerSummary(ymStr) : null;
-  return { ok: true, ym: ymStr, days: Object.values(days).sort((a, b) => a.d < b.d ? -1 : 1), barbers: Object.values(perBarber), perDay, byShop, total: { sales: byShop.reduce((a, s) => a + s.sales, 0), wage: byShop.reduce((a, s) => a + s.wage, 0), exp: byShop.reduce((a, s) => a + s.expTotal, 0), profit: byShop.reduce((a, s) => a + s.profit, 0) }, closed: list('CLOSED_MONTHS').includes(ymStr), paid: list('PAID_MONTHS').includes(ymStr) , customers };
+  return { ok: true, ym: ymStr, days: Object.values(days).sort((a, b) => a.d < b.d ? 1 : -1), barbers: Object.values(perBarber), perDay, byShop, total: { sales: byShop.reduce((a, s) => a + s.sales, 0), wage: byShop.reduce((a, s) => a + s.wage, 0), exp: byShop.reduce((a, s) => a + s.expTotal, 0), profit: byShop.reduce((a, s) => a + s.profit, 0) }, closed: list('CLOSED_MONTHS').includes(ymStr), paid: list('PAID_MONTHS').includes(ymStr) , customers };
 }
 
 /** สรุปลูกค้ารายเดือนจากข้อความสรุปร้าน (เฉพาะ owner) — ใหม่/ประจำ + ที่มาลูกค้าใหม่ */
