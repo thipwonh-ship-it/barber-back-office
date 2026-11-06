@@ -23,6 +23,10 @@
   table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:right} td:first-child,th:first-child{text-align:left}
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9} .modal .card{width:100%;max-width:480px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto;margin:0}
   .x{float:right;background:none;border:0;font-size:22px;color:var(--mute)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0} .chip{border:1px solid var(--line);background:#141417;color:var(--ink);border-radius:20px;padding:6px 12px;font-size:14px} .chip.on{background:var(--pri);color:var(--pri-ink);border-color:var(--pri)}
+  .qi{display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:10px 0} .qi .t{font-weight:700;font-size:17px;min-width:56px} .qi .c{flex:1;line-height:1.3} .qi .c small{color:var(--mute)} .qi button{border:1px solid var(--line);background:#141417;color:var(--ink);border-radius:9px;padding:7px 9px;font-size:13px}
+  .qi.done .t{color:#b7e4c0} .qi.no{opacity:.55} .off{background:repeating-linear-gradient(45deg,#1a1a1e,#1a1a1e 6px,#222227 6px,#222227 12px);border-radius:10px;padding:12px;text-align:center;color:var(--mute)}
+  .share{display:block;text-align:center;text-decoration:none;background:#06c755;color:#fff;border-radius:12px;padding:15px;font-size:17px;font-weight:700;margin-top:10px}
 </style>
 </head>
 <body><div class="wrap">
@@ -53,6 +57,13 @@
       <div id="todayStatus" class="status hide"></div>
       <div id="msg" class="msg"></div>
     </div>
+    <div class="card" id="qCard">
+      <h2>📅 คิวของฉัน</h2>
+      <div class="chips" id="qDays"></div>
+      <div id="qBody" class="mute">กำลังโหลด…</div>
+      <div class="row"><button class="btn" style="font-size:16px;padding:13px" onclick="openBook()">+ ลงคิวลูกค้า</button><button class="btn sec" style="font-size:16px;padding:13px" onclick="openLeave()">🏖️ ขอลาหยุด</button></div>
+      <div id="lvList"></div>
+    </div>
     <div class="card">
       <h2>เมนู</h2>
       <div class="menu">
@@ -63,6 +74,34 @@
       </div>
     </div>
   </div>
+
+  <!-- ลงคิว -->
+  <div class="modal" id="bookBox"><div class="card">
+    <button class="x" onclick="close('bookBox')">×</button><h2 id="bTitle">📅 ลงคิวลูกค้า</h2>
+    <div class="mute">ลูกค้านัดเราโดยตรง — ลงที่นี่ก่อนรับปากทุกครั้ง ระบบกันเวลาชนให้</div>
+    <div class="row"><div><label>วันที่</label><input type="date" id="bDate" onchange="bCheck()"></div><div><label>เวลา</label><select id="bTime" onchange="bCheck()"></select></div></div>
+    <label>ร้าน</label><select id="bShop" onchange="bCheck()"></select>
+    <div class="seg" id="bN"><button data-v="1" class="on" onclick="bSlots(1)">1 คิว</button><button data-v="2" onclick="bSlots(2)">2 คิว</button></div>
+    <div id="bChk" class="msg" style="white-space:pre-line"></div>
+    <label>ชื่อลูกค้า</label><input id="bCust">
+    <label>เบอร์โทร</label><input id="bPhone" inputmode="tel" placeholder="ถ้ามี">
+    <button class="btn" id="bBtn" onclick="sendBook()">บันทึกคิว</button><div id="bMsg" class="msg"></div>
+  </div></div>
+  <!-- ลาหยุด -->
+  <div class="modal" id="leaveBox"><div class="card">
+    <button class="x" onclick="close('leaveBox')">×</button><h2>🏖️ ขอลาหยุด</h2>
+    <div class="mute">ส่งคำขอให้ปิ๊กอนุมัติ · อนุมัติแล้ววันนั้นจะจองคิวเราไม่ได้</div>
+    <div class="row"><div><label>ตั้งแต่</label><input type="date" id="lFrom"></div><div><label>ถึง</label><input type="date" id="lTo"></div></div>
+    <label>ประเภท</label><select id="lReason"></select>
+    <label>เหตุผล</label><input id="lNote" placeholder="เช่น กลับบ้านต่างจังหวัด">
+    <button class="btn" id="lBtn" onclick="sendLeave()">ส่งคำขอลา</button><div id="lMsg" class="msg" style="white-space:pre-line"></div>
+  </div></div>
+  <div class="modal" id="shareBox" style="align-items:center"><div class="card" style="width:92%;max-width:380px;border-radius:16px">
+    <h2 id="shT"></h2><div id="shM" class="mute" style="white-space:pre-line"></div>
+    <a class="share" id="shA" target="_blank" rel="noopener">📤 ส่งเข้ากลุ่มไลน์</a>
+    <div class="mute" style="margin-top:6px">เลือกกลุ่มรวมร้าน → กดส่ง · ระบบจะตอบยืนยันในกลุ่มทันที</div>
+    <button class="btn sec" onclick="close('shareBox')">ปิด</button>
+  </div></div>
 
   <!-- หยิบเงินสด -->
   <div class="modal" id="dlg" style="align-items:center"><div class="card" style="width:92%;max-width:360px;border-radius:16px;margin:0"><h2 id="dlgT"></h2><div id="dlgM" style="white-space:pre-line"></div><div class="row" style="margin-top:12px"><button class="btn sec" id="dlgNo" onclick="dlgEnd(false)">ยกเลิก</button><button class="btn" onclick="dlgEnd(true)">ยืนยัน</button></div></div></div>
@@ -129,8 +168,8 @@
     ['cShop','kShop'].forEach(id=>$(id).innerHTML=w.shops.map(s=>'<option'+(s.name===sel.shop?' selected':'')+'>'+s.name+'</option>').join(''));
     $('cReason').innerHTML=w.reasons.map(r=>'<option>'+r+'</option>').join(''); cashReason();
     $('kMethod').innerHTML=w.methods.map(r=>'<option>'+r+'</option>').join(''); $('kWho').value=w.collector; colMethod();
-    pick('shop',sel.shop); pick('shift',sel.shift); renderToday(w.today); getGPS();
-    if(MODE==='cash') setTimeout(openCash,300); if(MODE==='collect') setTimeout(openCollect,300); if(MODE==='slip') setTimeout(openSlip,300);
+    pick('shop',sel.shop); pick('shift',sel.shift); renderToday(w.today); getGPS(); loadQ();
+    if(MODE==='cash') setTimeout(openCash,300); if(MODE==='collect') setTimeout(openCollect,300); if(MODE==='slip') setTimeout(openSlip,300); if(MODE==='queue') setTimeout(()=>$('qCard').scrollIntoView(),400); if(MODE==='leave') setTimeout(openLeave,400);
   }
   function pick(k,v){ sel[k]=v; const seg=k==='shop'?$('shopSeg'):$('shiftSeg'); [...seg.children].forEach(b=>b.classList.toggle('on',b.dataset.v===v)); if(k==='shop'){ const s=WHO.shops.find(x=>x.name===v); $('shiftWrap').classList.toggle('hide',!s||!s.open1||s.open1===s.open2); } }
   function renderToday(t){ const el=$('todayStatus'); if(!t){el.classList.add('hide');return;} el.classList.remove('hide'); el.textContent='วันนี้: '+t.shop+' กะ '+t.shift+' · เข้า '+t.tin+(t.tout?' · ออก '+t.tout:'')+(t.late>0?' · สาย '+t.late+' นาที':' · ตรงเวลา'); $('inBtn').disabled=!!t.tin; $('outBtn').disabled=!t.tin||!!t.tout; }
@@ -156,6 +195,45 @@
     h+='<table><tr><th>วันที่</th><th>ร้าน</th><th>หัว</th><th>ยอด</th><th>ค่าแรง</th></tr>'+r.days.slice().reverse().map(x=>'<tr><td>'+x.d.slice(5)+'</td><td>'+x.shop+'</td><td>'+x.heads+'</td><td>'+x.sales.toLocaleString()+'</td><td>'+x.wage.toLocaleString()+'</td></tr>').join('')+'</table>';
     $('sBody').innerHTML=h; if(r.paid) $('sPdf').classList.remove('hide'); }catch(e){$('sBody').textContent='เชื่อมต่อไม่ได้';} }
   async function openPdf(){ $('sPdf').disabled=true; try{ const r=await run('mySlipPdf',TOK,$('sYm').value); if(!r.ok){await ask(r.msg,'แจ้งเตือน',true);return;} const b=Uint8Array.from(atob(r.b64),c=>c.charCodeAt(0)); const url=URL.createObjectURL(new Blob([b],{type:'application/pdf'})); const a=document.createElement('a'); a.href=url; a.download=r.name; a.target='_blank'; document.body.appendChild(a); a.click(); }finally{$('sPdf').disabled=false;} }
+  /* ---------- คิวของฉัน + ลา ---------- */
+  let QD=null, QDATE='';
+  const ymdL=d=>d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+  const addD=(s,k)=>{const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+k);return ymdL(d);};
+  const tm=t=>{const m=/(\d+):(\d+)/.exec(t||'');return m?+m[1]*60+ +m[2]:0;}, fm=x=>('0'+Math.floor(x/60)).slice(-2)+':'+('0'+x%60).slice(-2);
+  const escH=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function shareOpen(title,text){ $('shT').textContent=title; $('shM').textContent=text; $('shA').href='https://line.me/R/share?text='+encodeURIComponent(text); open('shareBox'); }
+  async function loadQ(d){ QDATE=d||QDATE||ymdL(new Date()); const t=ymdL(new Date());
+    $('qDays').innerHTML=[['วันนี้',t],['พรุ่งนี้',addD(t,1)],['มะรืน',addD(t,2)]].map(([l,v])=>'<button class="chip'+(v===QDATE?' on':'')+'" onclick="loadQ(\''+v+'\')">'+l+'</button>').join('')+'<input type="date" value="'+QDATE+'" style="width:auto;flex:1;margin:0;padding:6px" onchange="loadQ(this.value)">';
+    $('qBody').innerHTML='<div class="mute">กำลังโหลด…</div>';
+    try{ const r=await run('qMyDay',TOK,QDATE); if(!r.ok){ $('qBody').textContent=r.msg; return; } QD=r; renderQ(r); }catch(e){ $('qBody').textContent='เชื่อมต่อไม่ได้'; } }
+  function renderQ(r){
+    let h='<div class="mute" style="margin-bottom:4px">'+escH(r.label)+' · ร้าน '+escH(r.shop)+'</div>';
+    if(r.off) h+='<div class="off">🏖️ '+escH(r.off)+' — วันนี้ไม่รับคิว</div>';
+    else if(!r.q.length) h+='<div class="mute" style="padding:8px 0">ยังไม่มีคิว</div>';
+    h+=r.q.map(x=>'<div class="qi '+(x.status==='มาแล้ว'?'done':x.status==='ไม่มา'?'no':'')+'"><div class="t">'+x.start+'</div><div class="c">'+escH(x.cust)+(x.phone?' · <a href="tel:'+escH(x.phone)+'" style="color:var(--ink)">'+escH(x.phone)+'</a>':'')+'<br><small>ถึง '+x.end+' · '+escH(x.ch)+' · '+escH(x.by)+(x.status!=='จอง'?' · <b>'+escH(x.status)+'</b>':'')+'</small></div>'
+      +(x.status==='จอง'?'<button onclick="qMark(\''+x.id+'\',\'มาแล้ว\')">✓ มา</button><button onclick="qMark(\''+x.id+'\',\'ไม่มา\')">✗</button>'+(x.by===r.name?'<button onclick="qCancel(\''+x.id+'\')">ยกเลิก</button>':''):'')+'</div>').join('');
+    $('qBody').innerHTML=h;
+    $('lvList').innerHTML=r.leaves.length?'<div style="margin-top:12px"><b style="font-size:14px">ใบลาของฉัน</b>'+r.leaves.map(l=>'<div class="qi"><div class="c">'+escH(l.label)+' · '+escH(l.reason)+'<br><small>'+(l.approved?'✅ อนุมัติแล้ว':'⏳ รอปิ๊กอนุมัติ')+'</small></div><button onclick="cancelLeave(\''+l.id+'\')">ยกเลิก</button></div>').join('')+'</div>':''; }
+  async function qMark(id,st){ const r=await run('qMark',TOK,id,st); if(!r.ok){ await ask(r.msg,'แจ้งเตือน',true); } loadQ(); }
+  async function qCancel(id){ if(!await ask('ยกเลิกคิว '+id+'?','ยกเลิกคิว')) return; const r=await run('qMark',TOK,id,'ยกเลิก'); if(!r.ok){ await ask(r.msg,'แจ้งเตือน',true); return; } loadQ(); if(r.share) shareOpen('❌ ยกเลิกคิวแล้ว — แจ้งกลุ่มว่าว่าง',r.share); }
+  function openBook(){ const r=QD||{}; $('bDate').value=QDATE; $('bShop').innerHTML=(r.shops||WHO.shops.map(s=>s.name)).map(s=>'<option'+(s===r.shop?' selected':'')+'>'+s+'</option>').join('');
+    const o=[]; for(let t=600;t<=1260;t+=10) o.push(fm(t)); const now=new Date(), nx=Math.ceil((now.getHours()*60+now.getMinutes())/10)*10;
+    $('bTime').innerHTML=o.map(t=>'<option'+(QDATE===ymdL(now)&&tm(t)===Math.max(nx,600)?' selected':'')+'>'+t+'</option>').join(''); $('bCust').value=''; $('bPhone').value=''; $('bMsg').style.display='none'; bSlots(1); open('bookBox'); }
+  function bSlots(k){ [...$('bN').children].forEach(b=>b.classList.toggle('on',+b.dataset.v===k)); bCheck(); }
+  const bP=()=>({date:$('bDate').value,time:$('bTime').value,shop:$('bShop').value,slots:+$('bN').querySelector('.on').dataset.v,cust:$('bCust').value,phone:$('bPhone').value});
+  let _bc=0, BST='';
+  async function bCheck(){ const my=++_bc; show('bChk','กำลังเช็กเวลาว่าง…','warn'); const r=await run('qCheckMe',TOK,bP()); if(my!==_bc) return;
+    BST=r.ok?'ok':r.warn?'warn':'block'; $('bBtn').disabled=BST==='block'; $('bBtn').textContent=BST==='warn'?'ยืนยันลงคิว':'บันทึกคิว';
+    if(r.ok){ show('bChk','✓ ว่าง '+r.start+'–'+r.end,'ok'); return; }
+    show('bChk',r.msg,r.warn?'warn':'err'); if((r.suggest||[]).length) $('bChk').innerHTML=escH(r.msg)+'<div style="margin-top:6px">เวลาว่างใกล้สุด: '+r.suggest.map(t=>'<button class="chip" onclick="$(\'bTime\').value=\''+t+'\';bCheck()">'+t+'</button>').join(' ')+'</div>'; }
+  async function sendBook(){ if(BST==='block') return; if(!$('bCust').value.trim()){ show('bMsg','ใส่ชื่อลูกค้า','err'); return; } $('bBtn').disabled=true; show('bMsg','กำลังบันทึก…','warn');
+    try{ const p=bP(); p.force=BST==='warn'; const r=await run('qBook',TOK,p); $('bBtn').disabled=false; if(!r.ok){ show('bMsg',r.msg,'err'); bCheck(); return; } close('bookBox'); loadQ(p.date); shareOpen(r.msg,r.share); }catch(e){ $('bBtn').disabled=false; show('bMsg','เชื่อมต่อไม่ได้','err'); } }
+  function openLeave(){ const r=QD||{}; const t=addD(ymdL(new Date()),1); $('lFrom').value=t; $('lTo').value=t; $('lReason').innerHTML=(r.reasons||['ลากิจ','ลาป่วย','ลาพักร้อน','อื่นๆ']).map(x=>'<option>'+x+'</option>').join(''); $('lNote').value=''; $('lMsg').style.display='none'; open('leaveBox'); }
+  async function sendLeave(force){ $('lBtn').disabled=true; show('lMsg','กำลังส่ง…','warn');
+    try{ const r=await run('leaveMe',TOK,{from:$('lFrom').value,to:$('lTo').value,reason:$('lReason').value,note:$('lNote').value,force:!!force}); $('lBtn').disabled=false;
+      if(!r.ok){ if(r.needConfirm&&await ask(r.msg,'มีคิวลูกค้าวันนั้น')) return sendLeave(true); show('lMsg',r.msg,'err'); return; }
+      close('leaveBox'); loadQ(); shareOpen(r.msg,r.share); }catch(e){ $('lBtn').disabled=false; show('lMsg','เชื่อมต่อไม่ได้','err'); } }
+  async function cancelLeave(id){ if(!await ask('ยกเลิกใบลา '+id+'?','ยกเลิกลา')) return; const r=await run('leaveCancelMe',TOK,id); if(!r.ok){ await ask(r.msg,'แจ้งเตือน',true); return; } loadQ(); shareOpen(r.msg,r.share); }
   start();
 </script>
 </body></html>
