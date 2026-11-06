@@ -23,7 +23,7 @@ input,select,textarea{width:100%;border:1px solid #3a3a41;border-radius:9px;padd
 .login{text-align:center;padding:40px 16px}.login .btn{background:#06c755;color:#fff}
 .scroll{overflow-x:auto}.bar{height:8px;background:#2e2e34;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9}.modal .card{width:100%;max-width:560px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto;margin:0}.x{float:right;background:none;border:0;font-size:22px;color:var(--mute)}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}.chip{border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:20px;padding:5px 12px;font-size:13px}.chip.on{background:var(--pri);color:var(--pri-ink);border-color:var(--pri);font-weight:700}
+.chip.pick{position:relative;overflow:hidden}.chip.pick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;padding:0;border:0}.chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}.chip{border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:20px;padding:5px 12px;font-size:13px}.chip.on{background:var(--pri);color:var(--pri-ink);border-color:var(--pri);font-weight:700}
 .addb{display:flex;gap:8px;align-items:center;margin:8px 0}.addb select{flex:1}.addb .btn{margin-top:0;flex:0 0 auto}
 .qg{display:grid;position:relative;column-gap:4px}.qh{grid-row:1;text-align:center;font-weight:700;font-size:13px;line-height:1.1}.qh small{display:block;font-weight:400;color:var(--mute);font-size:10.5px}
 .qt{grid-column:1;font-size:11px;color:var(--mute);border-top:1px solid var(--line);padding-top:1px}.qc{border-top:1px dotted #26262b;cursor:pointer}.qc.hr{border-top:1px solid var(--line)}.qc:active{background:#2a2a30}
@@ -118,7 +118,8 @@ async function pQueue(el){ QS.shop=QS.shop||INIT.shops[0]; const d=await api({ap
 function qReload(){ go('q',true); }
 function renderQueue(el,d){
   const chip=(lb,v)=>'<button class="chip'+(QS.date===v?' on':'')+'" onclick="QS.date=\''+v+'\';qReload()">'+lb+'</button>';
-  let h='<div class="card"><div class="chips">'+chip('วันนี้',TODAY)+chip('พรุ่งนี้',addD(TODAY,1))+chip('มะรืน',addD(TODAY,2))+'<input type="date" value="'+d.date+'" style="width:auto;flex:1;padding:5px 8px" onchange="QS.date=this.value;qReload()"></div>';
+  const other=QS.date!==TODAY&&QS.date!==addD(TODAY,1);
+  let h='<div class="card"><div class="chips">'+chip('วันนี้',TODAY)+chip('พรุ่งนี้',addD(TODAY,1))+'<span class="chip pick'+(other?' on':'')+'">📅 '+(other?esc(d.label):'เลือกวัน')+'<input type="date" value="'+d.date+'" onchange="if(this.value){QS.date=this.value;qReload()}"></span></div>';
   h+='<div class="seg">'+INIT.shops.map(s=>'<button class="'+(s===d.shop?'on':'')+'" onclick="QS.shop=\''+s+'\';qReload()">'+s+'</button>').join('')+'</div>';
   h+='<div class="row"><button class="btn" onclick="qForm({})">+ จองคิว</button>'+(d.canLeave?'<button class="btn sec" onclick="lvForm()">🏖️ ลงลาให้ช่าง</button>':'')+'</div>';
   if(d.unsent) h+='<div class="msg warn" style="display:block">📤 มี '+d.unsent+' คิวที่ยังไม่ได้ส่งเข้ากลุ่ม (ป้าย 📤 ในตาราง) — แตะคิวแล้วกดส่ง</div>';

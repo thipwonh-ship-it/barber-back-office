@@ -23,6 +23,7 @@
   table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:right} td:first-child,th:first-child{text-align:left}
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9} .modal .card{width:100%;max-width:480px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto;margin:0}
   .x{float:right;background:none;border:0;font-size:22px;color:var(--mute)}
+  .chip.pick{position:relative;overflow:hidden} .chip.pick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;margin:0;padding:0;border:0}
   .chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0} .chip{border:1px solid var(--line);background:#141417;color:var(--ink);border-radius:20px;padding:6px 12px;font-size:14px} .chip.on{background:var(--pri);color:var(--pri-ink);border-color:var(--pri)}
   .qi{display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:10px 0} .qi .t{font-weight:700;font-size:17px;min-width:56px} .qi .c{flex:1;line-height:1.3} .qi .c small{color:var(--mute)} .qi button{border:1px solid var(--line);background:#141417;color:var(--ink);border-radius:9px;padding:7px 9px;font-size:13px}
   .qi.done .t{color:#b7e4c0} .qi.no{opacity:.55} .off{background:repeating-linear-gradient(45deg,#1a1a1e,#1a1a1e 6px,#222227 6px,#222227 12px);border-radius:10px;padding:12px;text-align:center;color:var(--mute)}
@@ -61,7 +62,7 @@
       <h2>📅 คิวของฉัน</h2>
       <div class="chips" id="qDays"></div>
       <div id="qBody" class="mute">กำลังโหลด…</div>
-      <div class="row"><button class="btn" style="font-size:16px;padding:13px" onclick="openBook()">+ ลงคิวลูกค้า</button><button class="btn sec" style="font-size:16px;padding:13px" onclick="openLeave()">🏖️ ขอลาหยุด</button></div>
+      <div class="row"><button class="btn sec" style="font-size:16px;padding:13px" onclick="openBook()">+ ลงคิวลูกค้า</button><button class="btn sec" style="font-size:16px;padding:13px" onclick="openLeave()">🏖️ ขอลาหยุด</button></div>
       <button class="btn warn" style="font-size:16px;padding:13px" onclick="sickToday()">🤒 ลาป่วยวันนี้</button>
       <div id="lvList"></div>
     </div>
@@ -204,7 +205,8 @@
   const escH=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   function shareOpen(title,text){ $('shT').textContent=title; $('shM').textContent=text; $('shA').href='https://line.me/R/share?text='+encodeURIComponent(text); open('shareBox'); }
   async function loadQ(d){ QDATE=d||QDATE||ymdL(new Date()); const t=ymdL(new Date());
-    $('qDays').innerHTML=[['วันนี้',t],['พรุ่งนี้',addD(t,1)],['มะรืน',addD(t,2)]].map(([l,v])=>'<button class="chip'+(v===QDATE?' on':'')+'" onclick="loadQ(\''+v+'\')">'+l+'</button>').join('')+'<input type="date" value="'+QDATE+'" style="width:auto;flex:1;margin:0;padding:6px" onchange="loadQ(this.value)">';
+    const other=QDATE!==t&&QDATE!==addD(t,1), lb=new Date(QDATE+'T00:00:00').toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short'});
+    $('qDays').innerHTML=[['วันนี้',t],['พรุ่งนี้',addD(t,1)]].map(([l,v])=>'<button class="chip'+(v===QDATE?' on':'')+'" onclick="loadQ(\''+v+'\')">'+l+'</button>').join('')+'<span class="chip pick'+(other?' on':'')+'">📅 '+(other?lb:'เลือกวัน')+'<input type="date" value="'+QDATE+'" onchange="if(this.value)loadQ(this.value)"></span>';
     $('qBody').innerHTML='<div class="mute">กำลังโหลด…</div>';
     try{ const r=await run('qMyDay',TOK,QDATE); if(!r.ok){ $('qBody').textContent=r.msg; return; } QD=r; renderQ(r); }catch(e){ $('qBody').textContent='เชื่อมต่อไม่ได้'; } }
   function renderQ(r){
