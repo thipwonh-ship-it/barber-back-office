@@ -23,6 +23,7 @@ input,select,textarea{width:100%;border:1px solid #3a3a41;border-radius:9px;padd
 .login{text-align:center;padding:40px 16px}.login .btn{background:#06c755;color:#fff}
 .scroll{overflow-x:auto}.bar{height:8px;background:#2e2e34;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9}.modal .card{width:100%;max-width:560px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto;margin:0}.x{float:right;background:none;border:0;font-size:22px;color:var(--mute)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}.chip{border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:20px;padding:5px 12px;font-size:13px}.chip.on{background:var(--pri);color:var(--pri-ink);border-color:var(--pri);font-weight:700}
 </style>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script src="config.js"></script></head>
 <body>
@@ -184,8 +185,20 @@ async function pMonth(el){ const d=await api({api:'month',ym:M_YM}); if(!d.ok) t
      +'<div class="mute" style="margin:6px 0 10px">ลูกค้าใหม่ '+pn+'% · ข้อมูลจาก '+c.days+' วันที่ช่างส่งสรุป'+(c.noDetail?' · ไม่ได้แยกรายคน '+c.noDetail+' คน':'')+'</div>'
      +(c.sources.length?'<div style="font-weight:600;margin-bottom:6px">ลูกค้าใหม่มาจากไหน</div>'+c.sources.map(s=>'<div class="srow"><span>'+esc(s.src)+'</span><span class="sbar"><i style="width:'+Math.round(s.n*100/mx)+'%"></i></span><b>'+s.n+'</b></div>').join(''):'<div class="mute">ยังไม่มีข้อมูลที่มา</div>')+'</div>'; });
   h+='<div class="card"><h2>ช่าง</h2><div class="scroll"><table><tr><th>ช่าง</th><th>วัน</th><th>หัว</th><th>ยอด</th><th>ค่าแรง</th><th>สาย</th></tr>'+d.barbers.sort((a,b)=>b.wage-a.wage).map(b=>'<tr><td>'+b.name+'</td><td>'+b.days+'</td><td>'+b.heads+'</td><td>'+n(b.sales)+'</td><td>'+n(b.wage)+'</td><td>'+(b.late?b.late+' ('+b.lateMin+'น.)':'-')+'</td></tr>').join('')+'</table></div></div>';
+  MD=d.perDay||[]; h+='<div class="card" id="mdCard"></div>';
   h+='<div class="card"><h2>รายวัน (หัว / ยอด)</h2><div class="scroll"><table><tr><th>วันที่</th>'+INIT.shops.map(s=>'<th>'+s+'</th>').join('')+'<th>รวม</th></tr>'+d.days.map(r=>{let t=0,tsales=0;const cells=INIT.shops.map(s=>{const x=r[s]||{heads:0,sales:0};t+=x.heads;tsales+=x.sales;return '<td>'+(x.heads?x.heads+' / '+n(x.sales):'-')+'</td>';}).join('');return '<tr><td>'+r.d.slice(5)+'</td>'+cells+'<td><b>'+t+'</b> / '+n(tsales)+'</td></tr>';}).join('')+'</table></div></div>';
-  el.innerHTML=h; }
+  el.innerHTML=h; renderMD(); }
+/* รายวันต่อช่าง (เลือกช่างได้) */
+let MD=[], MD_NAME='';
+function renderMD(){ const c=$('mdCard'); if(!c) return; const names=[...new Set(MD.map(r=>r.name))]; if(MD_NAME&&!names.includes(MD_NAME)) MD_NAME='';
+  const rows=MD.filter(r=>!MD_NAME||r.name===MD_NAME); const anyDaily=rows.some(r=>r.daily);
+  let h='<h2>👤 รายวันต่อช่าง</h2><div class="chips">'+['',...names].map(nm=>'<button class="chip'+(nm===MD_NAME?' on':'')+'" onclick="MD_NAME=\''+esc(nm)+'\';renderMD()">'+(nm||'ทุกคน')+'</button>').join('')+'</div>';
+  if(!rows.length){ c.innerHTML=h+'<div class="mute">ยังไม่มีข้อมูล</div>'; return; }
+  const t=rows.reduce((a,r)=>(a.h+=r.heads,a.s+=r.sales,a.w+=r.wage,a),{h:0,s:0,w:0});
+  h+='<div class="scroll"><table><tr><th>วันที่</th>'+(MD_NAME?'':'<th>ช่าง</th>')+'<th>ร้าน</th><th>หัว</th><th>ยอด</th><th>ค่าแรง</th>'+(anyDaily?'<th>โอนรายวัน</th>':'')+'</tr>'
+   +rows.map(r=>'<tr><td>'+r.d.slice(5)+'</td>'+(MD_NAME?'':'<td>'+esc(r.name)+'</td>')+'<td>'+esc(r.shop)+'</td><td>'+r.heads+'</td><td>'+n(r.sales)+'</td><td>'+n(r.wage)+'</td>'+(anyDaily?'<td>'+(r.daily?(r.paidOn?'<span style="color:var(--ok)">✓ '+r.paidOn.slice(5)+'</span>':'<span class="mute">ยัง</span>'):'')+'</td>':'')+'</tr>').join('')
+   +'<tr style="font-weight:700"><td>รวม</td>'+(MD_NAME?'':'<td>'+rows.length+' วัน</td>')+'<td>'+(MD_NAME?rows.length+' วัน':'')+'</td><td>'+t.h+'</td><td>'+n(t.s)+'</td><td>'+n(t.w)+'</td>'+(anyDaily?'<td></td>':'')+'</tr></table></div>';
+  c.innerHTML=h; }
 async function setTarget(shop,cur){
   if(cur&&!(await confirmA('เป้า '+shop+' เดือน '+M_YM+' ตั้งไว้แล้ว '+cur+' หัว\nต้องการเปลี่ยนใช่ไหม?','เป้าตั้งไว้แล้ว'))) return;
   const v=await promptA((cur?'แก้เป้าหัว ':'ตั้งเป้าหัว ')+shop+' เดือน '+M_YM,cur||'',true); if(v==null||v==='') return;
