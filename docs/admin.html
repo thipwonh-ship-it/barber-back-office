@@ -193,7 +193,7 @@ async function setTarget(shop,cur){
   const r=await api({api:'target_set',ym:M_YM,shop,val:v.trim()}); msg('gmsg',r.msg,r.ok?'ok':'err'); if(r.ok){ $('pg_today').dataset.loaded=''; $('pg_pay').dataset.loaded=''; go('month',true); } }
 
 /* ---------- เงินเดือน ---------- */
-let P_YM=(()=>{const d=new Date();d.setDate(0);return todayStr(d);})().slice(0,7);
+let P_YM=(()=>{const d=new Date();d.setDate(0);const m=todayStr(d).slice(0,7);return m<(BBO.START_YM||'2026-11')?(BBO.START_YM||'2026-11'):m;})();
 async function pPay(el){ const d=await api({api:'payroll',ym:P_YM}); if(!d.ok) throw new Error(d.msg);
   let h='<div class="card"><div class="row"><h2>💰 เงินเดือน</h2>'+monthSel('pYm',P_YM,'P_YM=this.value;go(\'pay\',true)')+'</div><div class="mute">สถานะ: '+(d.paid?'โอนแล้ว ✓ ส่งสลิปแล้ว':d.closed?'ปิดงวดแล้ว รอโอน':'ยังไม่ปิดงวด')+' · รวมจ่ายวันที่ 2 <b>'+n(d.total)+'</b> บาท</div>';
   h+='<div class="scroll"><table><tr><th>ช่าง</th><th>วัน</th><th>หัว</th><th>ค่าแรง</th><th>โบนัส</th><th>เบิก</th><th>ปกส.</th><th>จ่ายรายวัน</th><th>สุทธิ</th></tr>'+d.people.map(p=>'<tr><td>'+p.name+' <small class="mute">'+p.shop+'</small></td><td>'+p.days+'</td><td>'+p.heads+'</td><td>'+n(p.wage)+'</td><td>'+n(p.bonus)+'</td><td>'+n(p.advance)+'</td><td>'+n(p.sso)+'</td><td>'+n(p.dailyPaid)+'</td><td><b>'+n(p.net)+'</b></td></tr>').join('')+'</table></div>';

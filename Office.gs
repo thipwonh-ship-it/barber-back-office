@@ -25,15 +25,15 @@ function officeApi(a, p) {
 function deny() { return { ok: false, msg: 'เฉพาะแอดมินเท่านั้น' }; }
 function list(k) { return (prop(k) || '').split(',').filter(Boolean); }
 function addList(k, v) { const l = list(k); if (!l.includes(v)) l.push(v); P().setProperty(k, l.join(',')); }
-function monthList() { const out = []; const d = todayBkk(); for (let i = 0; i < 14; i++) { out.push(ym(d)); d.setMonth(d.getMonth() - 1); } return out; }
+function monthList() { const out = []; const d = todayBkk(); for (let i = 0; i < 14; i++) { if (ym(d) < START_YM) break; out.push(ym(d)); d.setMonth(d.getMonth() - 1); } return out; }
 
 /* ---------- อ่านแผ่น ---------- */
 function rowsOf(name, cols) { const s = sh(name); const n = s.getLastRow() - 1; return n < 1 ? [] : s.getRange(2, 1, n, cols).getValues(); }
-function dailyRows(filter) { return rowsOf(SH_DAILY, D_BY).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[D_SHOP - 1]).trim(), name: String(r[D_NAME - 1]).trim(), heads: num(r[D_HEADS - 1]), sales: num(r[D_SALES - 1]), cash: num(r[D_CASH - 1]), transfer: num(r[D_TRANSFER - 1]), calc: num(r[D_CALC - 1]), over: r[D_OVER - 1] === '' ? '' : num(r[D_OVER - 1]), paid: num(r[D_PAID - 1]), note: String(r[D_NOTE - 1] || ''), by: String(r[D_BY - 1] || '') })).filter(x => x.d && (!filter || filter(x))); }
-function expenseRows(ymStr) { return rowsOf(SH_EXP, X_FROM).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[X_SHOP - 1]).trim(), type: String(r[X_TYPE - 1]).trim(), name: String(r[X_NAME - 1] || '').trim(), amt: num(r[X_AMT - 1]), detail: String(r[X_DETAIL - 1] || ''), by: String(r[X_BY - 1] || ''), link: String(r[X_LINK - 1] || ''), from: String(r[X_FROM - 1] || '') })).filter(x => x.d && (!ymStr || x.d.slice(0, 7) === ymStr)); }
-function cashRows(ymStr) { return rowsOf(SH_CASH, C_LINK).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[C_SHOP - 1]).trim(), method: String(r[C_METHOD - 1]), amt: num(r[C_AMT - 1]), who: String(r[C_WHO - 1] || ''), by: String(r[C_BY - 1] || ''), link: String(r[C_LINK - 1] || '') })).filter(x => x.d && (!ymStr || x.d.slice(0, 7) === ymStr)); }
+function dailyRows(filter) { return rowsOf(SH_DAILY, D_BY).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[D_SHOP - 1]).trim(), name: String(r[D_NAME - 1]).trim(), heads: num(r[D_HEADS - 1]), sales: num(r[D_SALES - 1]), cash: num(r[D_CASH - 1]), transfer: num(r[D_TRANSFER - 1]), calc: num(r[D_CALC - 1]), over: r[D_OVER - 1] === '' ? '' : num(r[D_OVER - 1]), paid: num(r[D_PAID - 1]), note: String(r[D_NOTE - 1] || ''), by: String(r[D_BY - 1] || '') })).filter(x => x.d >= START_DATE && (!filter || filter(x))); }
+function expenseRows(ymStr) { return rowsOf(SH_EXP, X_FROM).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[X_SHOP - 1]).trim(), type: String(r[X_TYPE - 1]).trim(), name: String(r[X_NAME - 1] || '').trim(), amt: num(r[X_AMT - 1]), detail: String(r[X_DETAIL - 1] || ''), by: String(r[X_BY - 1] || ''), link: String(r[X_LINK - 1] || ''), from: String(r[X_FROM - 1] || '') })).filter(x => x.d >= START_DATE && (!ymStr || x.d.slice(0, 7) === ymStr)); }
+function cashRows(ymStr) { return rowsOf(SH_CASH, C_LINK).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[C_SHOP - 1]).trim(), method: String(r[C_METHOD - 1]), amt: num(r[C_AMT - 1]), who: String(r[C_WHO - 1] || ''), by: String(r[C_BY - 1] || ''), link: String(r[C_LINK - 1] || '') })).filter(x => x.d >= START_DATE && (!ymStr || x.d.slice(0, 7) === ymStr)); }
 function gpsDist(v) { const m = /\((\d+) ม\.\)/.exec(String(v || '')); return m ? +m[1] : (String(v || '').trim() ? null : ''); }
-function timeRows(filter) { return rowsOf(SH_TIME, T_GPSOUT).map(r => ({ d: dateKey(r[0]), name: String(r[T_NAME - 1]).trim(), shop: String(r[T_SHOP - 1]).trim(), shift: String(r[T_SHIFT - 1]), tin: tStr(r[T_IN - 1]), tout: tStr(r[T_OUT - 1]), late: num(r[T_LATE - 1]), distIn: gpsDist(r[T_GPSIN - 1]), distOut: gpsDist(r[T_GPSOUT - 1]), status: String(r[T_STATUS - 1] || ''), note: String(r[T_NOTE - 1] || '') })).filter(x => x.d && (!filter || filter(x))); }
+function timeRows(filter) { return rowsOf(SH_TIME, T_GPSOUT).map(r => ({ d: dateKey(r[0]), name: String(r[T_NAME - 1]).trim(), shop: String(r[T_SHOP - 1]).trim(), shift: String(r[T_SHIFT - 1]), tin: tStr(r[T_IN - 1]), tout: tStr(r[T_OUT - 1]), late: num(r[T_LATE - 1]), distIn: gpsDist(r[T_GPSIN - 1]), distOut: gpsDist(r[T_GPSOUT - 1]), status: String(r[T_STATUS - 1] || ''), note: String(r[T_NOTE - 1] || '') })).filter(x => x.d >= START_DATE && (!filter || filter(x))); }
 
 /* ---------- เงินสดคงเหลือควรมี ต่อร้าน ---------- */
 function cashBalance(upTo) {
@@ -129,11 +129,11 @@ function expenseAdd(a, p) {
 }
 
 /* ---------- โอนปอนรายวัน (ปิ๊ก) ---------- */
-function dailyPayRows() { const s = ss().getSheetByName(SH_DAILYPAY); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 7).getValues().map(r => ({ paidOn: dateKey(r[0]), name: String(r[1]).trim(), forDate: dateKey(r[2]), amt: num(r[3]), by: String(r[4] || ''), link: String(r[5] || '') })); }
+function dailyPayRows() { const s = ss().getSheetByName(SH_DAILYPAY); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 7).getValues().map(r => ({ paidOn: dateKey(r[0]), name: String(r[1]).trim(), forDate: dateKey(r[2]), amt: num(r[3]), by: String(r[4] || ''), link: String(r[5] || '') })).filter(x => x.forDate >= START_DATE); }
 function pondData() {
   const dailyB = barbers(false).filter(b => b.daily); const paid = dailyPayRows(); const today = todayBkk(); const out = { ok: true, barbers: [], today: [] };
-  // เริ่มนับโอนรายวันตั้งแต่วันที่เริ่มใช้ระบบ (ตั้งค่า L28:L30 "ตั้งแต่วันที่") — ก่อนหน้านั้นจ่ายไปแล้วนอกระบบ
-  const starts = shops().map(x => x.cashFrom).filter(Boolean).sort(); const start = starts[0] || ym(today) + '-01';
+  // เริ่มนับโอนรายวันตั้งแต่วันเริ่มใช้ระบบ (START_DATE) — ก่อนหน้านั้นจ่ายไปแล้วนอกระบบ
+  const start = START_DATE;
   dailyB.forEach(b => {
     const rows = dailyRows(r => r.name === b.name && r.d >= start).slice(-45).reverse().map(r => { const pd = paid.find(x => x.name === b.name && x.forDate === r.d); return { d: r.d, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid, paid: !!pd, paidOn: pd ? pd.paidOn : '', link: pd ? pd.link : '' }; });
     const due = rows.filter(r => !r.paid && r.wage > 0 && r.d <= ymd(new Date(today.getTime() - 2 * 86400000)));
@@ -161,7 +161,7 @@ function pondPaid(a, p) {
 
 /* ---------- เงินเดือน ---------- */
 function payrollData(ymStr) {
-  ymStr = /^\d{4}-\d{2}$/.test(ymStr || '') ? ymStr : prevMonth(); const s = sh(SH_PAY);
+  ymStr = /^\d{4}-\d{2}$/.test(ymStr || '') ? ymStr : prevMonth(); if (ymStr < START_YM) ymStr = START_YM; const s = sh(SH_PAY);
   s.getRange('B2').setValue(parseYmd(ymStr + '-01')); SpreadsheetApp.flush();
   const head = s.getRange('A5:O5').getValues()[0]; const rows = s.getRange('A6:O25').getValues().filter(r => r[0] !== '' && (num(r[2]) > 0 || num(r[12]) !== 0));
   const people = rows.map(r => { const o = {}; head.forEach((h, i) => o[h] = r[i]); return { name: String(r[0]), shop: String(r[1]), days: num(r[2]), heads: num(r[3]), sales: num(r[4]), wage: num(r[5]), shopHeads: num(r[6]), target: num(r[7]), bonus: num(r[8]), advance: num(r[9]), sso: num(r[10]), dailyPaid: num(r[11]), net: num(r[12]), late: num(r[13]), lateMin: num(r[14]) }; });
