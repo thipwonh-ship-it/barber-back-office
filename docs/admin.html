@@ -121,7 +121,7 @@ function renderQueue(el,d){
   const other=QS.date!==TODAY&&QS.date!==addD(TODAY,1);
   let h='<div class="card"><div class="chips">'+chip('วันนี้',TODAY)+chip('พรุ่งนี้',addD(TODAY,1))+'<span class="chip pick'+(other?' on':'')+'">📅 '+(other?esc(d.label):'เลือกวัน')+'<input type="date" value="'+d.date+'" onchange="if(this.value){QS.date=this.value;qReload()}"></span></div>';
   h+='<div class="seg">'+INIT.shops.map(s=>'<button class="'+(s===d.shop?'on':'')+'" onclick="QS.shop=\''+s+'\';qReload()">'+s+'</button>').join('')+'</div>';
-  h+='<div class="row"><button class="btn" onclick="qForm({})">+ จองคิว</button>'+(d.canLeave?'<button class="btn sec" onclick="lvForm()">🏖️ ลงลาให้ช่าง</button>':'')+'</div>';
+  h+='<div class="row"><button class="btn sec" onclick="qForm({})">+ จองคิว</button>'+(d.canLeave?'<button class="btn sec" onclick="lvForm()">🏖️ ลงลาให้ช่าง</button>':'')+'</div>';
   if(d.unsent) h+='<div class="msg warn" style="display:block">📤 มี '+d.unsent+' คิวที่ยังไม่ได้ส่งเข้ากลุ่ม (ป้าย 📤 ในตาราง) — แตะคิวแล้วกดส่ง</div>';
   h+='</div>';
   // ลารออนุมัติ / ลาที่จะถึง

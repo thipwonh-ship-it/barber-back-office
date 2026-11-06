@@ -138,7 +138,7 @@
 <script>
   const $ = id => document.getElementById(id);
   let TOK = '', MODE = '', LINE_ERR = '';
-  let WHO = null; let pos = null, sel = { shop: '', shift: '11' };
+  let WHO = null; let pos = null, sel = { shop: '', shift: '' }; // กะ: ยังไม่เลือก → ปุ่มสีเท่ากัน · กดเลือกแล้วค่อยเด่น
   function tick(){ const n=new Date(); $('clock').textContent=n.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}); $('date').textContent=n.toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); } tick(); setInterval(tick,10000);
   function show(id,t,c){ const m=$(id); m.textContent=t; m.className='msg '+c; m.style.display='block'; }
   function open(id){ $(id).style.display='flex'; } function close(id){ $(id).style.display='none'; }
@@ -170,13 +170,13 @@
     ['cShop','kShop'].forEach(id=>$(id).innerHTML=w.shops.map(s=>'<option'+(s.name===sel.shop?' selected':'')+'>'+s.name+'</option>').join(''));
     $('cReason').innerHTML=w.reasons.map(r=>'<option>'+r+'</option>').join(''); cashReason();
     $('kMethod').innerHTML=w.methods.map(r=>'<option>'+r+'</option>').join(''); $('kWho').value=w.collector; colMethod();
-    pick('shop',sel.shop); pick('shift',sel.shift); renderToday(w.today); getGPS(); loadQ();
+    pick('shop',sel.shop); if(w.today&&w.today.shift){ pick('shift',String(w.today.shift)); } renderToday(w.today); getGPS(); loadQ();
     if(MODE==='cash') setTimeout(openCash,300); if(MODE==='collect') setTimeout(openCollect,300); if(MODE==='slip') setTimeout(openSlip,300); if(MODE==='queue') setTimeout(()=>$('qCard').scrollIntoView(),400); if(MODE==='leave') setTimeout(openLeave,400);
   }
   function pick(k,v){ sel[k]=v; const seg=k==='shop'?$('shopSeg'):$('shiftSeg'); [...seg.children].forEach(b=>b.classList.toggle('on',b.dataset.v===v)); if(k==='shop'){ const s=WHO.shops.find(x=>x.name===v); $('shiftWrap').classList.toggle('hide',!s||!s.open1||s.open1===s.open2); } }
   function renderToday(t){ const el=$('todayStatus'); if(!t){el.classList.add('hide');return;} el.classList.remove('hide'); el.textContent='วันนี้: '+t.shop+' กะ '+t.shift+' · เข้า '+t.tin+(t.tout?' · ออก '+t.tout:'')+(t.late>0?' · สาย '+t.late+' นาที':' · ตรงเวลา'); $('inBtn').disabled=!!t.tin; $('outBtn').disabled=!t.tin||!!t.tout; }
   function getGPS(){ if(!navigator.geolocation){$('gps').textContent='อุปกรณ์ไม่รองรับ GPS';return;} navigator.geolocation.getCurrentPosition(p=>{pos={lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)};$('gps').textContent='GPS พร้อม (±'+pos.acc+' ม.)';},e=>{pos=null;$('gps').textContent='ไม่ได้ตำแหน่ง GPS — เปิด Location ให้ LINE แล้วลองใหม่';},{enableHighAccuracy:true,timeout:15000,maximumAge:30000}); }
-  async function punch(a,force){ $('inBtn').disabled=$('outBtn').disabled=true; show('msg','กำลังบันทึก…','warn');
+  async function punch(a,force){ if(a==='in'&&!sel.shift&&!$('shiftWrap').classList.contains('hide')){ show('msg','เลือกกะก่อน (10:00–20:00 หรือ 11:00–21:00)','err'); return; } $('inBtn').disabled=$('outBtn').disabled=true; show('msg','กำลังบันทึก…','warn');
     try{ const r=await run('punch',TOK,a,{shop:sel.shop,shift:sel.shift,lat:pos&&pos.lat,lng:pos&&pos.lng,acc:pos&&pos.acc,force:!!force});
       if(!r.ok){ show('msg',r.msg,r.far?'warn':'err'); if(r.far&&await ask(r.msg+'\n\nยืนยันว่าอยู่ที่ร้าน?','อยู่นอกพื้นที่ร้าน')) return punch(a,true); renderToday(WHO.today); return; }
       WHO.today=r.today; renderToday(r.today); show('msg',r.msg,r.late>0?'warn':'ok'); }
