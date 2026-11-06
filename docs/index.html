@@ -62,7 +62,7 @@
       <h2>📅 คิวของฉัน</h2>
       <div class="chips" id="qDays"></div>
       <div id="qBody" class="mute">กำลังโหลด…</div>
-      <div class="row"><button class="btn sec" style="font-size:16px;padding:13px" onclick="openBook()">+ ลงคิวลูกค้า</button><button class="btn sec" style="font-size:16px;padding:13px" onclick="openLeave()">🏖️ ขอลาหยุด</button></div>
+      <div class="row"><button class="btn sec" style="font-size:16px;padding:13px" onclick="openBook()">+ จองคิว</button><button class="btn sec" style="font-size:16px;padding:13px" onclick="openLeave()">🏖️ ขอลาหยุด</button></div>
       <button class="btn warn" style="font-size:16px;padding:13px" onclick="sickToday()">🤒 ลาป่วยวันนี้</button>
       <div id="lvList"></div>
     </div>
@@ -79,7 +79,7 @@
 
   <!-- ลงคิว -->
   <div class="modal" id="bookBox"><div class="card">
-    <button class="x" onclick="close('bookBox')">×</button><h2 id="bTitle">📅 ลงคิวลูกค้า</h2>
+    <button class="x" onclick="close('bookBox')">×</button><h2 id="bTitle">📅 จองคิว</h2>
     <div class="mute">ลูกค้านัดเราโดยตรง — ลงที่นี่ก่อนรับปากทุกครั้ง ระบบกันเวลาชนให้</div>
     <div class="row"><div><label>วันที่</label><input type="date" id="bDate" onchange="bCheck()"></div><div><label>เวลา</label><select id="bTime" onchange="bCheck()"></select></div></div>
     <label>ร้าน</label><select id="bShop" onchange="bCheck()"></select>
@@ -87,7 +87,7 @@
     <div id="bChk" class="msg" style="white-space:pre-line"></div>
     <label>ชื่อลูกค้า</label><input id="bCust">
     <label>เบอร์โทร</label><input id="bPhone" inputmode="tel" placeholder="ถ้ามี">
-    <button class="btn" id="bBtn" onclick="sendBook()">บันทึกคิว</button><div id="bMsg" class="msg"></div>
+    <button class="btn" id="bBtn" onclick="sendBook()">บันทึก</button><div id="bMsg" class="msg"></div>
   </div></div>
   <!-- ลาหยุด -->
   <div class="modal" id="leaveBox"><div class="card">
@@ -226,7 +226,7 @@
   const bP=()=>({date:$('bDate').value,time:$('bTime').value,shop:$('bShop').value,slots:+$('bN').querySelector('.on').dataset.v,cust:$('bCust').value,phone:$('bPhone').value});
   let _bc=0, BST='';
   async function bCheck(){ const my=++_bc; show('bChk','กำลังเช็กเวลาว่าง…','warn'); const r=await run('qCheckMe',TOK,bP()); if(my!==_bc) return;
-    BST=r.ok?'ok':r.warn?'warn':'block'; $('bBtn').disabled=BST==='block'; $('bBtn').textContent=BST==='warn'?'ยืนยันลงคิว':'บันทึกคิว';
+    BST=r.ok?'ok':r.warn?'warn':'block'; $('bBtn').disabled=BST==='block'; $('bBtn').textContent=BST==='warn'?'ยืนยันจองคิว':'บันทึก';
     if(r.ok){ show('bChk','✓ ว่าง '+r.start+'–'+r.end,'ok'); return; }
     show('bChk',r.msg,r.warn?'warn':'err'); if((r.suggest||[]).length) $('bChk').innerHTML=escH(r.msg)+'<div style="margin-top:6px">เวลาว่างใกล้สุด: '+r.suggest.map(t=>'<button class="chip" onclick="$(\'bTime\').value=\''+t+'\';bCheck()">'+t+'</button>').join(' ')+'</div>'; }
   async function sendBook(){ if(BST==='block') return; if(!$('bCust').value.trim()){ show('bMsg','ใส่ชื่อลูกค้า','err'); return; } $('bBtn').disabled=true; show('bMsg','กำลังบันทึก…','warn');

@@ -249,7 +249,7 @@ function qBoardText(arg) {
 function groupEvent(ev) {
   const src = ev.source || {}; const gid = src.groupId || src.roomId || '';
   if (gid && prop('GROUP_ID') !== gid && (ev.type === 'join' || ev.type === 'message')) P().setProperty('GROUP_ID', gid);
-  if (ev.type === 'join') { lineReply(ev.replyToken, '✂️ ระบบคิวเข้ากลุ่มแล้ว\n• ลงคิว/ลา ในแอปแล้วกด "📤 ส่งเข้ากลุ่ม" — ระบบจะยืนยันในกลุ่มทันที\n• พิมพ์ "คิว" / "คิว ราม" / "คิว พรุ่งนี้" ดูตารางคิว'); return; }
+  if (ev.type === 'join') { lineReply(ev.replyToken, '✂️ ระบบคิวเข้ากลุ่มแล้ว\n• จองคิว/ลา ในแอปแล้วกด "📤 ส่งเข้ากลุ่ม" — ระบบจะยืนยันในกลุ่มทันที\n• พิมพ์ "คิว" / "คิว ราม" / "คิว พรุ่งนี้" ดูตารางคิว'); return; }
   if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;
   const txt = String(ev.message.text || '').trim(); let m;
   const parts = [];
