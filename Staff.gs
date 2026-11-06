@@ -145,7 +145,9 @@ function thaiNorm(t) { return String(t || '').replace(/\u0E4D\u0E32/g, '\u0E33')
 /** หายอดเงิน + เลขอ้างอิง + วันที่ จากข้อความสลิป (ทดสอบกับ OCR จริง: กสิกร, กรุงเทพ, SCB, กรุงไทย)
  *  หมายเหตุ: หลายธนาคาร OCR แยก "ป้าย" กับ "ค่า" คนละบรรทัด จึงไม่ยึดตำแหน่งป้าย */
 function parseSlip(text) {
-  const lines = thaiNorm(text).split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  // ตัดส่วน "ยอดเงินคงเหลือ/ใช้ได้" ออก (เช่น แถบแจ้งเตือนแอปธนาคารที่ทับสลิป "…ยอดเงินที่ใช้ได้ 40,201.34 บาท") ไม่ให้นับเป็นยอดโอน
+  const BAL = /ใชได|คงเหลือ|available|balance/i; // เทียบหลัง thaiNorm (ตัดวรรณยุกต์แล้ว: ใช้ได้ → ใชได)
+  const lines = thaiNorm(text).split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim().split(BAL)[0].trim()).filter(Boolean);
   const isFee = l => /คาธรรมเนียม|ธรรมเนียม|\bfee\b/i.test(l);
   const money = l => (l.match(/\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2}/g) || []).map(v => Number(v.replace(/,/g, ''))).filter(x => x > 0 && x < 1000000);
   // 1) ป้าย "จำนวน/Amount" ที่มีตัวเลขในบรรทัดเดียวกันหรือบรรทัดถัดไป (ถ้าบรรทัดถัดไปไม่ใช่ค่าธรรมเนียม)
@@ -153,7 +155,7 @@ function parseSlip(text) {
   for (let i = 0; i < lines.length && amount == null; i++) {
     const l = lines[i].split(/คาธรรมเนียม|ธรรมเนียม|fee/i)[0];
     if (!/จำนวน|นวนเงิน|amount/i.test(l)) continue;
-    let v = money(l); if (!v.length && i + 1 < lines.length && !isFee(lines[i + 1])) v = money(lines[i + 1]);
+    let v = money(l); for (let k = 1; !v.length && k <= 3 && i + k < lines.length && !isFee(lines[i + k]); k++) v = money(lines[i + k]); // ป้ายกับตัวเลขอาจห่างกัน 1–3 บรรทัดใน OCR
     if (v.length) amount = v[0];
   }
   // 2) ไม่เจอ → ยอดที่มากที่สุดในสลิป (ค่าธรรมเนียมเป็น 0.00 หรือน้อยกว่ายอดเสมอ)
