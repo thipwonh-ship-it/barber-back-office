@@ -29,9 +29,11 @@ input,select,textarea{width:100%;border:1px solid #3a3a41;border-radius:9px;padd
 .qt{grid-column:1;font-size:11px;color:var(--mute);border-top:1px solid var(--line);padding-top:1px}.qc{border-top:1px dotted #26262b;cursor:pointer}.qc.hr{border-top:1px solid var(--line)}.qc:active{background:#2a2a30}
 .qb{z-index:2;margin:1px 0;background:#e9e9ee;color:#0f0f11;border-radius:7px;padding:2px 5px;font-size:12px;line-height:1.25;overflow:hidden;cursor:pointer;box-shadow:0 1px 0 #000}.qb.done{background:#b7e4c0}.qb.no{background:#3a1d1f;color:#ffb3b6;text-decoration:line-through}.qb.self{outline:2px dashed #9a9aa3;outline-offset:-2px}
 .qoff{z-index:2;background:repeating-linear-gradient(45deg,#1a1a1e,#1a1a1e 6px,#222227 6px,#222227 12px);border-radius:8px;color:var(--mute);font-size:12px;display:flex;align-items:center;justify-content:center;text-align:center}
+/* กฎ UI: ปุ่มตัดสินใจ/ตัวเลือก สีเท่ากันก่อน → กดเลือกตัวไหนค่อยเข้ม */
+.btn.sec:active,.btn.sec.on{background:var(--pri)!important;color:var(--pri-ink)!important;border-color:var(--pri)!important}.seg button:active,.chip:active{background:var(--pri);color:var(--pri-ink)}
 </style>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script src="config.js"></script></head>
-<body>
+<body ontouchstart="">
 <div class="top"><div><b>✂️ Barber Dashboard</b><br><small id="me"></small></div><button class="btn sec" style="margin:0;padding:6px 10px;font-size:13px;border-color:#fff;color:#fff;background:none" onclick="reload()">⟳</button></div>
 <div class="wrap">
   <div id="loginBox" class="login card hide"><div style="font-size:40px">✂️</div><h2>Barber Back Office</h2><div class="mute">ล็อกอินด้วย LINE ครั้งเดียว เครื่องนี้จะจำไว้ 90 วัน</div><button class="btn w" onclick="lineLogin()">ล็อกอินด้วย LINE</button><div id="loginMsg" class="msg"></div></div>
@@ -55,7 +57,7 @@ input,select,textarea{width:100%;border:1px solid #3a3a41;border-radius:9px;padd
   <button data-p="pay" onclick="go('pay')"><span>💰</span>เงินเดือน</button>
 </div>
 <div class="modal" id="modal"><div class="card" id="modalBody"></div></div>
-<div class="modal" id="dlg" style="align-items:center"><div class="card" style="width:92%;max-width:360px;border-radius:16px;margin:0"><h2 id="dlgT"></h2><div id="dlgM" style="white-space:pre-line;margin-bottom:8px"></div><input id="dlgI" style="display:none" onkeydown="if(event.key==='Enter')dlgEnd(true)"><div class="row" style="margin-top:12px"><button class="btn sec" id="dlgNo" onclick="dlgEnd(false)">ยกเลิก</button><button class="btn" id="dlgOk" onclick="dlgEnd(true)">ตกลง</button></div></div></div>
+<div class="modal" id="dlg" style="align-items:center"><div class="card" style="width:92%;max-width:360px;border-radius:16px;margin:0"><h2 id="dlgT"></h2><div id="dlgM" style="white-space:pre-line;margin-bottom:8px"></div><input id="dlgI" style="display:none" onkeydown="if(event.key==='Enter')dlgEnd(true)"><div class="row" style="margin-top:12px"><button class="btn sec" id="dlgNo" onclick="dlgEnd(false)">ยกเลิก</button><button class="btn sec" id="dlgOk" onclick="dlgEnd(true)">ตกลง</button></div></div></div>
 <script>
 const $=id=>document.getElementById(id); const GAS=BBO.GAS_URL; let ADT=localStorage.getItem('bbo_adt')||'', ME=null, INIT=null, PAGE='today', TODAY=todayStr();
 function todayStr(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -126,7 +128,7 @@ function renderQueue(el,d){
   h+='</div>';
   // ลารออนุมัติ / ลาที่จะถึง
   const wait=(d.leaves||[]).filter(x=>!x.approved), ok=(d.leaves||[]).filter(x=>x.approved);
-  if(wait.length) h+='<div class="card" style="border-color:#6b5b2a"><h2>⏳ คำขอลารออนุมัติ ('+wait.length+')</h2>'+wait.map(x=>'<div class="dl"><div><b>'+esc(x.name)+'</b> · '+esc(x.reason)+' · '+esc(x.label)+(x.days.length>1?' ('+x.days.length+' วัน)':'')+'</div><div class="mute">'+esc((x.note.split('·')[3]||'').replace(/แจ้งล่วงหน้า.*/,'').trim())+'</div>'+(x.notice!=null&&x.notice<7&&x.reason!=='ลาป่วย'?'<div class="pill late">⚠️ แจ้งล่วงหน้า '+x.notice+' วัน (ต้อง 7 วัน)</div>':'')+(x.cover?'<div class="msg err" style="display:block;white-space:pre-line">⚠️ '+esc(x.cover)+'</div>':'')+(d.canLeave?'<div class="row"><button class="btn ok" onclick="lvApprove(\''+x.id+'\',true)">✅ อนุมัติ</button><button class="btn sec" onclick="lvApprove(\''+x.id+'\',false)">❌ ไม่อนุมัติ</button></div>':'<div class="mute">รอปิ๊กอนุมัติ</div>')+'</div>').join('')+'</div>';
+  if(wait.length) h+='<div class="card" style="border-color:#6b5b2a"><h2>⏳ คำขอลารออนุมัติ ('+wait.length+')</h2>'+wait.map(x=>'<div class="dl"><div><b>'+esc(x.name)+'</b> · '+esc(x.reason)+' · '+esc(x.label)+(x.days.length>1?' ('+x.days.length+' วัน)':'')+'</div><div class="mute">'+esc((x.note.split('·')[3]||'').replace(/แจ้งล่วงหน้า.*/,'').trim())+'</div>'+(x.notice!=null&&x.notice<7&&x.reason!=='ลาป่วย'?'<div class="pill late">⚠️ แจ้งล่วงหน้า '+x.notice+' วัน (ต้อง 7 วัน)</div>':'')+(x.cover?'<div class="msg err" style="display:block;white-space:pre-line">⚠️ '+esc(x.cover)+'</div>':'')+(d.canLeave?'<div class="row"><button class="btn sec" onclick="lvApprove(\''+x.id+'\',true)">✅ อนุมัติ</button><button class="btn sec" onclick="lvApprove(\''+x.id+'\',false)">❌ ไม่อนุมัติ</button></div>':'<div class="mute">รอปิ๊กอนุมัติ</div>')+'</div>').join('')+'</div>';
   // ตาราง
   const o=tm(d.open), c=tm(d.close), R=(c-o)/10, B=d.barbers;
   h+='<div class="card"><h2>📅 '+esc(d.label)+' · '+esc(d.shop)+' <span class="mute">('+d.open+'–'+d.close+' · คิวละ '+d.dur+' นาที)</span></h2>';
@@ -149,7 +151,7 @@ function renderQueue(el,d){
 function qFind(id){ for(const b of QS.d.barbers) for(const x of b.q) if(x.id===id) return x; return null; }
 function qShow(id){ const x=qFind(id); if(!x) return;
   let h='<h2>'+x.id+' · '+esc(x.name)+'</h2><div style="font-size:17px"><b>'+x.start+'–'+x.end+'</b> '+esc(QS.d.label)+' · '+esc(x.shop)+'</div><div style="margin-top:6px">👤 '+esc(x.cust)+(x.phone?' · <a href="tel:'+esc(x.phone)+'" style="color:var(--ink)">'+esc(x.phone)+'</a>':'')+'</div><div class="mute">'+esc(x.ch)+' · ลงโดย '+esc(x.by)+' '+esc(x.at)+(x.note?'<br>'+esc(x.note):'')+'</div><div class="pill" style="margin-top:6px">'+esc(x.status)+(x.sent?' · แจ้งกลุ่มแล้ว '+esc(x.sent):' · ยังไม่แจ้งกลุ่ม')+'</div>';
-  if(x.status==='จอง'||x.status==='มาแล้ว') h+='<div class="row"><button class="btn ok" onclick="qSt(\''+id+'\',\'มาแล้ว\')">✓ มาแล้ว</button><button class="btn sec" onclick="qSt(\''+id+'\',\'ไม่มา\')">✗ ไม่มา</button></div><div class="row"><button class="btn sec" onclick="closeModal();qForm(qFind(\''+id+'\'))">✏️ เลื่อน/แก้</button><button class="btn err" onclick="qSt(\''+id+'\',\'ยกเลิก\')">ยกเลิกคิว</button></div>';
+  if(x.status==='จอง'||x.status==='มาแล้ว') h+='<div class="row"><button class="btn sec" onclick="qSt(\''+id+'\',\'มาแล้ว\')">✓ มาแล้ว</button><button class="btn sec" onclick="qSt(\''+id+'\',\'ไม่มา\')">✗ ไม่มา</button></div><div class="row"><button class="btn sec" onclick="closeModal();qForm(qFind(\''+id+'\'))">✏️ เลื่อน/แก้</button><button class="btn sec" onclick="qSt(\''+id+'\',\'ยกเลิก\')">ยกเลิกคิว</button></div>';
   if(!x.sent&&x.status==='จอง') h+=shareBtn(x.share);
   modal(h); }
 async function qSt(id,st){ if(st==='ยกเลิก'&&!await confirmA('ยกเลิกคิว '+id+'?')) return; const r=await api({api:'q_status',id,status:st}); if(!r.ok){ alertA(r.msg); return; } if(r.share) modal('<h2>❌ ยกเลิก '+id+' แล้ว</h2><div class="mute">ส่งเข้ากลุ่มให้ช่างรู้ว่าว่างแล้ว</div>'+shareBtn(r.share,'📤 แจ้งกลุ่มว่าว่างแล้ว')); else closeModal(); qReload(); }
@@ -157,20 +159,20 @@ async function qSt(id,st){ if(st==='ยกเลิก'&&!await confirmA('ยก
 let QF={};
 function qTimes(open,close,dur){ const o=[]; for(let t=tm(open);t+dur<=tm(close);t+=10) o.push(fm(t)); return o; }
 function qForm(x){ const d=QS.d; QF={id:x.id||'',force:false};
-  const bs=INIT.barbers.map(b=>b.name); const slots=x.id?Math.max(1,Math.round((tm(x.end)-tm(x.start))/d.dur)):1;
+  const bs=INIT.barbers.map(b=>b.name); const slots=x.id?Math.max(1,Math.round((tm(x.end)-tm(x.start))/d.dur)):0; // ใหม่ = ยังไม่เลือก (ไม่เลือก = 1 คิว)
   let h='<h2>'+(x.id?'✏️ เลื่อนคิว '+x.id:'📅 จองคิว')+'</h2>';
   h+='<div class="row"><div><label>วันที่</label><input type="date" id="qfD" value="'+(x.d||d.date)+'" onchange="qfCheck()"></div><div><label>ร้าน</label>'+shopSel('qfS',x.shop||d.shop).replace('<select','<select onchange="qfCheck()"')+'</div></div>';
   h+='<div class="row"><div><label>ช่าง</label><select id="qfB" onchange="qfCheck()">'+bs.map(n=>'<option'+(n===(x.barber||x.name||(d.barbers.find(b=>!b.off)||{}).name)?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select></div><div><label>เวลา</label><select id="qfT" onchange="qfCheck()">'+qTimes('10:00','21:00',10).map(t=>'<option'+(t===(x.time||x.start)?' selected':'')+'>'+t+'</option>').join('')+'</select></div></div>';
-  h+='<label>จำนวนคิว</label><div class="seg" id="qfN">'+[1,2].map(k=>'<button data-v="'+k+'" class="'+(k===slots?'on':'')+'" onclick="qfSlots('+k+')">'+k+' คิว</button>').join('')+'</div>';
+  h+='<label>จำนวนคิว <span class="mute">(ไม่เลือก = 1 คิว)</span></label><div class="seg" id="qfN">'+[1,2].map(k=>'<button data-v="'+k+'" class="'+(k===slots?'on':'')+'" onclick="qfSlots('+k+')">'+k+' คิว</button>').join('')+'</div>';
   h+='<div id="qfChk" class="msg"></div>';
   h+='<label>เบอร์โทร</label><input id="qfP" inputmode="tel" value="'+esc(x.phone||'')+'" oninput="qfCust()" placeholder="08x-xxx-xxxx"><div id="qfCu" class="mute"></div>';
   h+='<label>ชื่อลูกค้า</label><input id="qfC" value="'+esc(x.cust||'')+'">';
-  h+='<label>ช่องทาง</label><div class="seg" id="qfH" style="flex-wrap:wrap">'+d.channels.map(c=>'<button data-v="'+c+'" class="'+(c===(x.ch||'โทร')?'on':'')+'" onclick="[...this.parentNode.children].forEach(b=>b.classList.toggle(\'on\',b===this))" style="flex:1 0 30%">'+c+'</button>').join('')+'</div>';
+  h+='<label>ช่องทาง</label><div class="seg" id="qfH" style="flex-wrap:wrap">'+d.channels.map(c=>'<button data-v="'+c+'" class="'+(c===x.ch?'on':'')+'" onclick="[...this.parentNode.children].forEach(b=>b.classList.toggle(\'on\',b===this))" style="flex:1 0 30%">'+c+'</button>').join('')+'</div>';
   h+='<label>หมายเหตุ</label><input id="qfX" value="" placeholder="เช่น ตัด+สระ, ขอช่างผู้หญิง">';
   h+='<button class="btn" id="qfGo" style="width:100%" onclick="qfSave()">บันทึก</button><div id="qfMsg" class="msg"></div>';
   modal(h); qfCheck(); }
 function qfSlots(k){ [...$('qfN').children].forEach(b=>b.classList.toggle('on',+b.dataset.v===k)); qfCheck(); }
-function qfP(){ return {id:QF.id,date:$('qfD').value,shop:$('qfS').value,barber:$('qfB').value,time:$('qfT').value,slots:+($('qfN').querySelector('.on')||{dataset:{v:1}}).dataset.v,cust:$('qfC').value,phone:$('qfP').value,ch:($('qfH').querySelector('.on')||{dataset:{}}).dataset.v,note:$('qfX').value,force:QF.force}; }
+function qfP(){ return {id:QF.id,date:$('qfD').value,shop:$('qfS').value,barber:$('qfB').value,time:$('qfT').value,slots:+($('qfN').querySelector('.on')||{dataset:{v:1}}).dataset.v||1,cust:$('qfC').value,phone:$('qfP').value,ch:($('qfH').querySelector('.on')||{dataset:{}}).dataset.v,note:$('qfX').value,force:QF.force}; }
 let _qfT=0;
 async function qfCheck(){ QF.force=false; const my=++_qfT; const p=qfP(); p.api='q_check'; const el=$('qfChk'); msg('qfChk','กำลังเช็กเวลาว่าง…','warn'); const r=await api(p); if(my!==_qfT) return;
   QF.state=r.ok?'ok':r.warn?'warn':'block'; $('qfGo').disabled=QF.state==='block'; $('qfGo').textContent=QF.state==='warn'?'ยืนยันจองแม้มีคำเตือน':'บันทึก';
@@ -179,7 +181,7 @@ async function qfCheck(){ QF.force=false; const my=++_qfT; const p=qfP(); p.api=
   el.innerHTML=esc(r.msg)+((r.suggest||[]).length?'<div style="margin-top:6px">เวลาว่างใกล้สุด: '+r.suggest.map(t=>'<button class="chip" onclick="$(\'qfT\').value=\''+t+'\';qfCheck()">'+t+'</button>').join(' ')+'</div>':'')+((r.others||[]).length&&!r.ok?'<div style="margin-top:6px">ช่างที่ว่างเวลานี้: '+r.others.map(n=>'<button class="chip" onclick="$(\'qfB\').value=\''+n+'\';qfCheck()">'+esc(n)+'</button>').join(' ')+'</div>':''); }
 let _qfC=0;
 async function qfCust(){ const v=$('qfP').value.replace(/\D/g,''); $('qfCu').textContent=''; if(v.length<9) return; const my=++_qfC; const r=await api({api:'q_cust',phone:v}); if(my!==_qfC||!r.found) return; if(!$('qfC').value) $('qfC').value=r.cust; $('qfCu').textContent='👤 ลูกค้าเก่า: '+r.cust+' · มาแล้ว '+r.visits+' ครั้ง'+(r.noshow?' · ไม่มา '+r.noshow+' ครั้ง':'')+' · ล่าสุด '+r.last+' กับ '+r.barber; }
-async function qfSave(){ if(QF.state==='block') return; if(!$('qfC').value.trim()){ msg('qfMsg','ใส่ชื่อลูกค้า','err'); return; }
+async function qfSave(){ if(QF.state==='block') return; if(!$('qfC').value.trim()){ msg('qfMsg','ใส่ชื่อลูกค้า','err'); return; } if(!$('qfH').querySelector('.on')){ msg('qfMsg','เลือกช่องทาง (โทร/LINE/Facebook…)','err'); return; }
   const p=qfP(); p.api='q_save'; if(QF.state==='warn') p.force=true; $('qfGo').disabled=true; msg('qfMsg','กำลังบันทึก…','warn');
   const r=await api(p); $('qfGo').disabled=false;
   if(!r.ok){ if(r.block||r.warn){ msg('qfMsg','',''); qfCheck(); } msg('qfMsg',r.msg,'err'); return; }
