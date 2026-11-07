@@ -170,13 +170,13 @@ function qForm(x){ const d=QS.d; QF={id:x.id||'',force:false};
   h+='<label>ชื่อลูกค้า</label><input id="qfC" value="'+esc(x.cust||'')+'">';
   h+='<label>ช่องทาง</label><div class="seg" id="qfH" style="flex-wrap:wrap">'+d.channels.map(c=>'<button data-v="'+c+'" class="'+(c===x.ch?'on':'')+'" onclick="[...this.parentNode.children].forEach(b=>b.classList.toggle(\'on\',b===this))" style="flex:1 0 30%">'+c+'</button>').join('')+'</div>';
   h+='<label>หมายเหตุ</label><input id="qfX" value="" placeholder="เช่น ตัด+สระ, ขอช่างผู้หญิง">';
-  h+='<button class="btn" id="qfGo" style="width:100%" onclick="qfSave()">บันทึก</button><div id="qfMsg" class="msg"></div>';
+  h+='<div class="row"><button class="btn sec hide" id="qfNo" style="flex:1" onclick="closeModal()">ไม่จอง</button><button class="btn" id="qfGo" style="flex:1" onclick="qfSave()">บันทึก</button></div><div id="qfMsg" class="msg"></div>';
   modal(h); qfCheck(); }
 function qfSvc(k){ [...$('qfN').children].forEach(b=>b.classList.toggle('on',b.dataset.v===k)); $('qfO').classList.toggle('hide',k!=='other'); qfCheck(); }
 function qfP(){ return {id:QF.id,date:$('qfD').value,shop:$('qfS').value,barber:$('qfB').value,time:$('qfT').value,svc:(($('qfN').querySelector('.on')||{dataset:{}}).dataset.v==='other')?($('qfV').value.trim()||'อื่นๆ'):'ตัดผม',cust:$('qfC').value,phone:$('qfP').value,ch:($('qfH').querySelector('.on')||{dataset:{}}).dataset.v,note:$('qfX').value,force:QF.force}; }
 let _qfT=0;
 async function qfCheck(){ QF.force=false; const my=++_qfT; const p=qfP(); p.api='q_check'; const el=$('qfChk'); msg('qfChk','กำลังเช็กเวลาว่าง…','warn'); const r=await api(p); if(my!==_qfT) return;
-  QF.state=r.ok?'ok':r.warn?'warn':'block'; $('qfGo').disabled=QF.state==='block'; $('qfGo').textContent=QF.state==='warn'?'ยืนยันจองแม้มีคำเตือน':'บันทึก';
+  QF.state=r.ok?'ok':r.warn?'warn':'block'; $('qfGo').disabled=QF.state==='block'; $('qfGo').textContent=QF.state==='warn'?'ยืนยันจอง':'บันทึก'; $('qfGo').className=QF.state==='warn'?'btn sec':'btn'; $('qfNo').classList.toggle('hide',QF.state!=='warn'); // มีคำเตือน = ปุ่มตัดสินใจ 2 ปุ่ม สีเท่ากัน
   if(r.ok){ msg('qfChk','✓ ว่าง '+r.start+'–'+r.end,'ok'); return; }
   el.className='msg '+(r.warn?'warn':'err'); el.style.display='block'; el.style.whiteSpace='pre-line';
   el.innerHTML=esc(r.msg)+((r.suggest||[]).length?'<div style="margin-top:6px">เวลาว่างใกล้สุด: '+r.suggest.map(t=>'<button class="chip" onclick="$(\'qfT\').value=\''+t+'\';qfCheck()">'+t+'</button>').join(' ')+'</div>':'')+((r.others||[]).length&&!r.ok?'<div style="margin-top:6px">ช่างที่ว่างเวลานี้: '+r.others.map(n=>'<button class="chip" onclick="$(\'qfB\').value=\''+n+'\';qfCheck()">'+esc(n)+'</button>').join(' ')+'</div>':''); }
