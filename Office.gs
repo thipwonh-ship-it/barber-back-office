@@ -20,7 +20,7 @@ function officeApi(a, p) {
     case 'paid': if (!owner) return deny(); return confirmPaid(p.ym, p.slips || {});
     case 'barber_save': if (!owner) return deny(); return barberSave(p);
     // ระบบคิว + ลาหยุด (Queue.gs) · อนุมัติลา = ผู้จัดการ (ปิ๊ก) เท่านั้น · Owner ดูอย่างเดียว
-    case 'q_save': case 'q_status': case 'lv_save': case 'lv_cancel': case 'lv_approve': case 'mv_save': case 'mv_cancel': a = Object.assign({}, a, { name: owner ? 'ทิพย์' : 'ปิ๊ก' }); break;
+    case 'q_save': case 'q_status': case 'q_setend': case 'lv_save': case 'lv_cancel': case 'lv_approve': case 'mv_save': case 'mv_cancel': a = Object.assign({}, a, { name: owner ? 'ทิพย์' : 'ปิ๊ก' }); break;
     default: break;
   }
   switch (p.api) {
@@ -28,6 +28,7 @@ function officeApi(a, p) {
     case 'q_check': return qCheck(p, p.id || '');
     case 'q_save': return qSave(a.name, p);
     case 'q_status': return qSetStatus(a.name, p.id, p.status);
+    case 'q_setend': return qSetEnd(a.name, p.id, p.end);
     case 'q_cust': return qCust(p.phone);
     case 'lv_save': if (owner) return { ok: false, msg: 'ลาหยุดให้ปิ๊กเป็นคนลง/อนุมัติ' }; return leaveSave(a.name, p);
     case 'lv_cancel': if (owner) return { ok: false, msg: 'ลาหยุดให้ปิ๊กเป็นคนลง/อนุมัติ' }; return leaveCancel(a.name, p.id);
