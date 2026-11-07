@@ -289,10 +289,14 @@ function qReplyFor(id) {
   const b = qById(id); if (!b) return '❓ ไม่พบคิว #' + id;
   if (!b.sent) qSheet().getRange(b.row, 13).setValue(nowText());
   const when = thDay(b.d) + ' ' + b.start + '–' + b.end + ' (' + b.shop + ')';
-  const who = '⟪' + b.name + '⟫'; // ⟪ชื่อ⟫ = แท็กช่างในกลุ่ม (mention → ช่างได้แจ้งเตือน)
-  if (b.status === 'ยกเลิก') return '🔓 ยกเลิกคิว #' + b.id + '\nช่าง ' + who + ' คิวลูกค้า ' + b.cust + ' ' + when + ' ยกเลิกแล้ว — ว่าง\n🙏 กรุณารับทราบ กดไลก์ข้อความนี้';
+  // ช่างจอง/ยกเลิกคิวตัวเอง → แค่แจ้งกลุ่ม ไม่แท็ก ไม่ต้องกดไลก์ · คนอื่น (ส่วนใหญ่ปิ๊ก) จองให้ → แท็กช่าง + ขอให้กดไลก์รับทราบ
+  const canceller = (/ยกเลิกโดย\s*(\S+)/.exec(b.note) || [])[1] || '';
+  const self = b.status === 'ยกเลิก' ? canceller === b.name : b.by === b.name;
+  const who = self ? b.name : '⟪' + b.name + '⟫'; // ⟪ชื่อ⟫ = แท็กช่างในกลุ่ม (mention → ช่างได้แจ้งเตือน)
+  const ack = self ? '' : '\n🙏 กรุณารับทราบ กดไลก์ข้อความนี้';
+  if (b.status === 'ยกเลิก') return '🔓 ยกเลิกคิว #' + b.id + '\nช่าง ' + who + ' คิวลูกค้า ' + b.cust + ' ' + when + ' ยกเลิกแล้ว — ว่าง' + ack;
   if (b.status === 'มาแล้ว' || b.status === 'ไม่มา') return (b.status === 'มาแล้ว' ? '✓' : '✗') + ' #' + b.id + ' ' + b.name + ' · ' + b.cust + ' — ' + b.status;
-  return '📌 ช่าง ' + who + ' มีคิว #' + b.id + '\nลูกค้า ' + b.cust + (b.phone ? ' ' + b.phone : '') + '\nเวลา ' + when + '\n🙏 กรุณารับทราบ กดไลก์ข้อความนี้';
+  return '📌 ช่าง ' + who + ' มีคิว #' + b.id + '\nลูกค้า ' + b.cust + (b.phone ? ' ' + b.phone : '') + '\nเวลา ' + when + (self ? '\n(ช่างรับคิวเอง)' : ack);
 }
 /** คำเตือนของใบลา: แจ้งล่วงหน้าไม่ถึง 7 วัน · ร้านจะขาดช่าง */
 function lvFlags(r, name, days) { const nt = (/แจ้งล่วงหน้า (-?\d+) วัน/.exec(r.note) || [])[1]; const cv = days.map(d => coverIssue(d, name)).filter(Boolean); return (nt != null && +nt < LV_NOTICE_DAYS ? '\n⚠️ แจ้งล่วงหน้า ' + nt + ' วัน (ต้อง ' + LV_NOTICE_DAYS + ' วัน)' : '') + (cv.length ? '\n⚠️ ' + cv.join('\n⚠️ ') : ''); }
