@@ -138,7 +138,7 @@ function renderQueue(el,d){
     h+='<div></div>'+B.map((b,i)=>'<div class="qh" style="grid-column:'+(i+2)+'">'+esc(b.name)+(b.off?'<small>🏖️ '+esc(b.off)+'</small>':b.pend?'<small>⏳ รออนุมัติลา</small>':b.moved?'<small>🔁 ย้ายมาช่วย</small>':b.cover?'<small>แทนช่างที่หยุด</small>':b.at!==d.shop?'<small>จาก '+esc(b.home)+'</small>':'')+'</div>').join('');
     for(let r=0;r<R;r+=6) h+='<div class="qt" style="grid-row:'+(r+2)+'/span 6">'+fm(o+r*10)+'</div>';
     B.forEach((b,i)=>{ if(b.off){ h+='<div class="qoff" style="grid-column:'+(i+2)+';grid-row:2/span '+R+'">'+esc(b.off)+'<br>จองไม่ได้</div>'; return; }
-      for(let r=0;r<R;r++) h+='<div class="qc'+(r%6===0?' hr':'')+'" style="grid-column:'+(i+2)+';grid-row:'+(r+2)+'" onclick="qForm({barber:\''+b.name+'\',time:\''+fm(o+r*10)+'\'})"></div>';
+      for(let r=0;r<R;r++) h+='<div class="qc'+(r%6===0?' hr':'')+'" style="grid-column:'+(i+2)+';grid-row:'+(r+2)+'" onclick="qForm({barber:\''+b.name+'\',time:\''+fm(Math.floor((o+r*10)/30)*30)+'\'})"></div>';
       b.q.forEach(x=>{ const s=Math.max(0,(tm(x.start)-o)/10), e=Math.min(R,(tm(x.end)-o)/10); h+='<div class="qb '+(x.status==='มาแล้ว'?'done':x.status==='ไม่มา'?'no':'')+(x.ch==='ช่างรับเอง'?' self':'')+'" style="grid-column:'+(i+2)+';grid-row:'+(s+2)+'/'+(e+2)+'" onclick="qShow(\''+x.id+'\')"><b>'+x.start+'</b> '+esc(x.cust)+(x.sent?'':' 📤')+(x.status==='มาแล้ว'?' ✓':x.status==='ไม่มา'?' ✗':'')+'</div>'; }); });
     h+='</div><div class="mute" style="margin-top:6px">แตะช่องว่าง = จอง · แตะคิว = ดู/มาแล้ว/เลื่อน/ยกเลิก · 📤 = ยังไม่ส่งกลุ่ม · เส้นประ = ช่างรับเอง</div>';
   }
@@ -157,12 +157,12 @@ function qShow(id){ const x=qFind(id); if(!x) return;
 async function qSt(id,st){ if(st==='ยกเลิก'&&!await confirmA('ยกเลิกคิว '+id+'?')) return; const r=await api({api:'q_status',id,status:st}); if(!r.ok){ alertA(r.msg); return; } if(r.share) modal('<h2>❌ ยกเลิก '+id+' แล้ว</h2><div class="mute">ส่งเข้ากลุ่มให้ช่างรู้ว่าว่างแล้ว</div>'+shareBtn(r.share,'📤 แจ้งกลุ่มว่าว่างแล้ว')); else closeModal(); qReload(); }
 /* ฟอร์มจอง/เลื่อน */
 let QF={};
-function qTimes(open,close,dur){ const o=[]; for(let t=tm(open);t+dur<=tm(close);t+=10) o.push(fm(t)); return o; }
+function qTimes(open,close,step){ const o=[]; for(let t=tm(open);t<tm(close);t+=step) o.push(fm(t)); return o; } // เวลาเริ่มคิวทุกครึ่งชั่วโมง 10:00–20:00
 function qForm(x){ const d=QS.d; QF={id:x.id||'',force:false};
   const bs=INIT.barbers.map(b=>b.name); const slots=x.id?Math.max(1,Math.round((tm(x.end)-tm(x.start))/d.dur)):0; // ใหม่ = ยังไม่เลือก (ไม่เลือก = 1 คิว)
   let h='<h2>'+(x.id?'✏️ เลื่อนคิว '+x.id:'📅 จองคิว')+'</h2>';
   h+='<div class="row"><div><label>วันที่</label><input type="date" id="qfD" value="'+(x.d||d.date)+'" onchange="qfCheck()"></div><div><label>ร้าน</label>'+shopSel('qfS',x.shop||d.shop).replace('<select','<select onchange="qfCheck()"')+'</div></div>';
-  h+='<div class="row"><div><label>ช่าง</label><select id="qfB" onchange="qfCheck()">'+bs.map(n=>'<option'+(n===(x.barber||x.name||(d.barbers.find(b=>!b.off)||{}).name)?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select></div><div><label>เวลา</label><select id="qfT" onchange="qfCheck()">'+qTimes('10:00','21:00',10).map(t=>'<option'+(t===(x.time||x.start)?' selected':'')+'>'+t+'</option>').join('')+'</select></div></div>';
+  h+='<div class="row"><div><label>ช่าง</label><select id="qfB" onchange="qfCheck()">'+bs.map(n=>'<option'+(n===(x.barber||x.name||(d.barbers.find(b=>!b.off)||{}).name)?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select></div><div><label>เวลา</label><select id="qfT" onchange="qfCheck()">'+(function(){ const ts=qTimes('10:00','20:30',30), cur=x.time||x.start; if(cur&&!ts.includes(cur)) ts.push(cur); return ts.sort(); })().map(t=>'<option'+(t===(x.time||x.start)?' selected':'')+'>'+t+'</option>').join('')+'</select></div></div>';
   h+='<label>จำนวนคิว <span class="mute">(ไม่เลือก = 1 คิว)</span></label><div class="seg" id="qfN">'+[1,2].map(k=>'<button data-v="'+k+'" class="'+(k===slots?'on':'')+'" onclick="qfSlots('+k+')">'+k+' คิว</button>').join('')+'</div>';
   h+='<div id="qfChk" class="msg"></div>';
   h+='<label>เบอร์โทร</label><input id="qfP" inputmode="tel" value="'+esc(x.phone||'')+'" oninput="qfCust()" placeholder="08x-xxx-xxxx"><div id="qfCu" class="mute"></div>';

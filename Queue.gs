@@ -108,7 +108,7 @@ function qCheck(p, excludeId) {
   const busy = qRows(x => x.d === d && Q_ACTIVE.includes(x.status) && x.id !== excludeId);
   const clash = (n, a, b) => busy.find(x => x.name === n && toMin(x.start) < b && a < toMin(x.end));
   const others = roster.filter(r => r.name !== name && r.at === shop && !r.off && !clash(r.name, s, e)).map(r => r.name);
-  const suggest = () => { const out = [], lo = Math.max(toMin(hrs.open), d === today ? Math.ceil(nowMin() / 10) * 10 : 0), hi = toMin(hrs.close) - dur; const c = []; for (let t = lo; t <= hi; t += 10) if (!clash(name, t, t + dur)) c.push(t); c.sort((a, b) => Math.abs(a - s) - Math.abs(b - s) || a - b); return c.slice(0, 3).sort((a, b) => a - b).map(fromMin); };
+  const suggest = () => { const out = [], lo = Math.max(toMin(hrs.open), d === today ? Math.ceil(nowMin() / 30) * 30 : 0), hi = toMin(hrs.close) - dur; const c = []; for (let t = Math.ceil(lo / 30) * 30; t <= hi; t += 30) if (!clash(name, t, t + dur)) c.push(t); c.sort((a, b) => Math.abs(a - s) - Math.abs(b - s) || a - b); return c.slice(0, 3).sort((a, b) => a - b).map(fromMin); };
   if (me.off) return { ok: false, block: true, msg: '⛔ ' + name + ' ' + me.off + ' ' + thDay(d) + ' — จองไม่ได้', others };
   const c = clash(name, s, e);
   if (c) return { ok: false, block: true, msg: '⛔ ' + name + ' มีคิว ' + c.start + '–' + c.end + ' แล้ว (' + (c.cust || '-') + (c.shop !== shop ? ' · ร้าน ' + c.shop : '') + ')', suggest: suggest(), others };
