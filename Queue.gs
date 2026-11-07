@@ -6,9 +6,10 @@
  * แจ้งกลุ่ม: คนลงคิวกดส่งข้อความ #Q.. เข้ากลุ่ม → OA reply (ฟรี ไม่ใช้โควตา push)
  */
 const SH_Q = 'คิว';
-const Q_HEAD = ['วันที่', 'เริ่ม', 'จบ', 'ร้าน', 'ช่าง', 'ลูกค้า', 'เบอร์', 'ช่องทาง', 'สถานะ', 'ผู้ลง', 'ลงเมื่อ', 'รหัส', 'แจ้งกลุ่มเมื่อ', 'หมายเหตุ', 'บริการ', 'รอเวลาเสร็จ'];
-// บริการ: "ตัดผม" = ระบบคิดเวลาเสร็จเอง (40/50 นาที) · อื่นๆ (ทำสี ดัด …) = ปิ๊กจองเวลาเริ่ม ระบบกันไว้ก่อน Q_HOLD นาที → ช่างใส่เวลาเสร็จในแอป
-const SVC_CUT = 'ตัดผม', Q_HOLD = 150; // อื่นๆ ที่ยังไม่มีเวลาเสร็จ กันไว้ 2 ชม.ครึ่ง (ทิพย์กำหนด 7 พ.ย. — คิวยังไม่เยอะ ถ้ามีคิวถัดไปปิ๊กถามช่าง)
+const Q_HEAD = ['วันที่', 'เริ่ม', 'จบ', 'ร้าน', 'ช่าง', 'ลูกค้า', 'เบอร์', 'ช่องทาง', 'สถานะ', 'ผู้ลง', 'ลงเมื่อ', 'รหัส', 'แจ้งกลุ่มเมื่อ', 'หมายเหตุ', 'บริการ'];
+// บริการ: "ตัดผม" = 40/50 นาที · อื่นๆ (ทำสี ดัด …) = กันเวลาไว้ 2 ชม.ครึ่ง (ทิพย์กำหนด 7 พ.ย.)
+// จองคิวถัดไปแทรกในช่วงงานอื่นๆ ของช่างคนเดิม → เตือนให้ปิ๊กถามช่างก่อน · ยืนยันแล้วระบบตัดเวลางานนั้นให้จบตอนคิวใหม่เริ่ม
+const SVC_CUT = 'ตัดผม', Q_HOLD = 150;
 const Q_ACTIVE = ['จอง', 'มาแล้ว'], Q_STATUS = ['จอง', 'มาแล้ว', 'ไม่มา', 'ยกเลิก'];
 const Q_CHANNELS = ['โทร', 'LINE', 'Facebook', 'ช่างรับเอง', 'อื่นๆ'];
 const ANY = 'ไม่ระบุ'; // คิวไม่ระบุช่าง: ช่างที่อยู่ร้านนั้นวันนั้นสลับรับกันเอง · กินช่างว่าง 1 คนในช่วงเวลานั้น
@@ -56,7 +57,7 @@ function qSheet() {
 }
 function qRows(filter) {
   const s = qSheet(); const n = s.getLastRow() - 1; if (n < 1) return [];
-  return s.getRange(2, 1, n, Q_HEAD.length).getValues().map((r, i) => ({ row: i + 2, d: dateKey(r[0]), start: tStr(r[1]), end: tStr(r[2]), shop: String(r[3]).trim(), name: String(r[4]).trim(), cust: String(r[5] || ''), phone: String(r[6] || ''), ch: String(r[7] || ''), status: String(r[8] || 'จอง').trim(), by: String(r[9] || ''), at: String(r[10] || ''), id: String(r[11] || ''), sent: String(r[12] || ''), note: String(r[13] || ''), svc: String(r[14] || '').trim() || SVC_CUT, pend: String(r[15] || '').trim() === 'รอ' })).filter(x => x.id && (!filter || filter(x)));
+  return s.getRange(2, 1, n, Q_HEAD.length).getValues().map((r, i) => ({ row: i + 2, d: dateKey(r[0]), start: tStr(r[1]), end: tStr(r[2]), shop: String(r[3]).trim(), name: String(r[4]).trim(), cust: String(r[5] || ''), phone: String(r[6] || ''), ch: String(r[7] || ''), status: String(r[8] || 'จอง').trim(), by: String(r[9] || ''), at: String(r[10] || ''), id: String(r[11] || ''), sent: String(r[12] || ''), note: String(r[13] || ''), svc: String(r[14] || '').trim() || SVC_CUT })).filter(x => x.id && (!filter || filter(x)));
 }
 function qById(id) { id = String(id || '').trim().toUpperCase(); if (!/^Q\d+$/.test(id)) return null; return qRows(x => x.id === id)[0] || null; }
 function lvReason(note) { return (/·\s*([^·]+?)\s*·/.exec(String(note || '')) || [])[1] || ''; }
@@ -103,9 +104,8 @@ function qCheck(p, excludeId) {
   if (!parseYmd(d)) return { ok: false, block: true, msg: 'เลือกวันที่' };
   const hrs = shopHours(shop); if (!hrs) return { ok: false, block: true, msg: 'ไม่พบร้าน ' + shop };
   const s = toMin(p.time); if (s < 0) return { ok: false, block: true, msg: 'เลือกเวลา' };
-  const cut = !p.svc || p.svc === SVC_CUT, endM = toMin(p.end);
-  if (!cut && endM >= 0 && endM <= s) return { ok: false, block: true, msg: '⛔ เวลาเสร็จต้องหลังเวลาเริ่ม' };
-  const dur = cut ? qDur(shop) : endM > s ? endM - s : Q_HOLD; const e = s + dur; // อื่นๆ ไม่มีเวลาเสร็จ → กันไว้ก่อน Q_HOLD นาที
+  const cut = !p.svc || p.svc === SVC_CUT;
+  const dur = cut ? qDur(shop) : Q_HOLD; const e = s + dur;
   const today = ymd(todayBkk());
   if (d < today || (d === today && s < nowMin() - 30)) return { ok: false, block: true, msg: '⛔ เวลานี้ผ่านไปแล้ว' };
   if (s < toMin(hrs.open) || e > toMin(hrs.close)) return { ok: false, block: true, msg: '⛔ ร้าน ' + shop + ' รับคิว ' + hrs.open + '–' + fromMin(toMin(hrs.close) - dur) + ' (ปิด ' + hrs.close + ')' };
@@ -124,15 +124,20 @@ function qCheck(p, excludeId) {
   if (isAny) {
     if (!shopB.length) return { ok: false, block: true, msg: '⛔ ' + thDay(d) + ' ร้าน ' + shop + ' ไม่มีช่างเข้า — จองไม่ได้' };
     if (!okAt(s, e)) return { ok: false, block: true, msg: '⛔ ร้าน ' + shop + ' ช่างไม่ว่างเวลานี้ (ช่างว่าง ' + freeAt(s, e) + ' คน · คิวไม่ระบุช่าง ' + anyAt(s, e) + ' คิว)', suggest: suggest() };
-    return { ok: true, start: fromMin(s), end: fromMin(e), team: shopB.map(r => r.name), pend: !cut && endM < 0 };
+    return { ok: true, start: fromMin(s), end: fromMin(e), team: shopB.map(r => r.name) };
   }
   if (me.off) return { ok: false, block: true, msg: '⛔ ' + name + ' ' + me.off + ' ' + thDay(d) + ' — จองไม่ได้', others };
-  const c = clash(name, s, e);
+  // งานอื่นๆ (ทำสี ดัด) ที่เริ่มก่อนคิวใหม่ = เวลาจบเป็นค่าประมาณ → เตือนให้ถามช่าง แทนการบล็อก
+  const soft = busy.filter(x => x.name === name && ov(x, s, e) && x.svc !== SVC_CUT && toMin(x.start) < s);
+  const c = busy.find(x => x.name === name && ov(x, s, e) && !soft.includes(x));
   if (c) return { ok: false, block: true, msg: '⛔ ' + name + ' มีคิว ' + c.start + '–' + c.end + ' แล้ว (' + (c.cust || '-') + (c.shop !== shop ? ' · ร้าน ' + c.shop : '') + ')', suggest: suggest(), others };
-  if (!okAt(s, e)) return { ok: false, block: true, msg: '⛔ เวลานี้มีคิวไม่ระบุช่างรอช่างร้าน ' + shop + ' อยู่ — ถ้า ' + name + ' รับคิวนี้ ช่างจะไม่พอ', suggest: suggest(), others };
+  if (soft.length && !p.force) return { ok: false, warn: true, msg: '⚠️ ' + name + ' มีงาน ' + soft.map(x => x.svc + ' ' + x.start + '–' + x.end + ' (' + x.cust + ')').join(', ') + ' — กันไว้ 2 ชม.ครึ่ง\nถามช่างก่อนว่าเสร็จทัน ' + fromMin(s) + ' ไหม · ยืนยันแล้วระบบจะตัดเวลางานนั้นให้จบ ' + fromMin(s), others, trim: soft.map(x => x.id) };
+  const ovNoSoft = (a, b) => busy.filter(x => x.name === name && ov(x, a, b) && !soft.includes(x)).length;
+  if (soft.length && ovNoSoft(s, e)) return { ok: false, block: true, msg: '⛔ ' + name + ' ไม่ว่างเวลานี้', suggest: suggest(), others };
+  if (!soft.length && !okAt(s, e)) return { ok: false, block: true, msg: '⛔ เวลานี้มีคิวไม่ระบุช่างรอช่างร้าน ' + shop + ' อยู่ — ถ้า ' + name + ' รับคิวนี้ ช่างจะไม่พอ', suggest: suggest(), others };
   const warns = []; if (me.pend) warns.push(name + ' ' + me.pend + ' ' + thDay(d)); if (me.at !== shop) warns.push(thDay(d) + ' ' + name + ' ประจำร้าน ' + me.at + (me.cover ? ' (ไปแทนช่างที่หยุด)' : me.moved ? ' (ปิ๊กย้ายไปช่วย)' : ''));
   if (warns.length && !p.force) return { ok: false, warn: true, msg: '⚠️ ' + warns.join('\n⚠️ ') + '\nยืนยันจองที่ร้าน ' + shop + '?', others };
-  return { ok: true, start: fromMin(s), end: fromMin(e), pend: !cut && endM < 0 };
+  return { ok: true, start: fromMin(s), end: fromMin(e), trim: soft.map(x => x.id) };
 }
 
 /** บันทึก/แก้คิว · by = ชื่อผู้ลง · onlyBarber = ช่างลงเอง (จองให้ตัวเองเท่านั้น) */
@@ -145,15 +150,16 @@ function qSave(by, p, onlyBarber) {
     if (!cust) return { ok: false, msg: 'ใส่ชื่อลูกค้า' };
     let old = null; if (p.id) { old = qById(p.id); if (!old) return { ok: false, msg: 'ไม่พบคิว ' + p.id }; if (onlyBarber && old.name !== onlyBarber) return { ok: false, msg: 'แก้ได้เฉพาะคิวของตัวเอง' }; if (!Q_ACTIVE.includes(old.status)) return { ok: false, msg: 'คิวนี้' + old.status + 'แล้ว' }; }
     p.svc = clean(p.svc, 30) || SVC_CUT;
-    if (old && p.svc !== SVC_CUT && !old.pend && !p.end && old.svc !== SVC_CUT) p.end = fromMin(toMin(p.time) + toMin(old.end) - toMin(old.start)); // เลื่อนคิว: คงระยะเวลาเดิม
     const chk = qCheck(p, old ? old.id : ''); if (!chk.ok) return chk;
     const ch = Q_CHANNELS.includes(p.ch) ? p.ch : (onlyBarber ? 'ช่างรับเอง' : 'โทร');
-    const s = qSheet(); const id = old ? old.id : 'Q' + seq('Q_SEQ'); const row = old ? old.row : s.getLastRow() + 1;
-    const vals = [[parseYmd(p.date), chk.start, chk.end, p.shop, p.barber, cust, phone, ch, 'จอง', old ? old.by : by, old ? old.at : nowText(), id, '', clean(p.note, 100) + (old ? (p.note ? ' · ' : '') + 'เลื่อนโดย ' + by + ' ' + nowText() : ''), p.svc, chk.pend ? 'รอ' : '']];
+    const s = qSheet();
+    (chk.trim || []).forEach(tid => { const t = qById(tid); if (t) { s.getRange(t.row, 3).setNumberFormat('@').setValue(chk.start); s.getRange(t.row, 14).setValue((t.note ? t.note + ' · ' : '') + 'ตัดจบ ' + chk.start + ' (ถามช่างแล้ว) โดย ' + by); } });
+    const id = old ? old.id : 'Q' + seq('Q_SEQ'); const row = old ? old.row : s.getLastRow() + 1;
+    const vals = [[parseYmd(p.date), chk.start, chk.end, p.shop, p.barber, cust, phone, ch, 'จอง', old ? old.by : by, old ? old.at : nowText(), id, '', clean(p.note, 100) + (old ? (p.note ? ' · ' : '') + 'เลื่อนโดย ' + by + ' ' + nowText() : ''), p.svc]];
     s.getRange(row, 2, 1, 2).setNumberFormat('@'); s.getRange(row, 7).setNumberFormat('@');
     s.getRange(row, 1, 1, Q_HEAD.length).setValues(vals); s.getRange(row, 1).setNumberFormat('yyyy-mm-dd');
     const b = qById(id);
-    return { ok: true, id, msg: (old ? '✏️ เลื่อนคิว ' : '✅ จองคิว ') + id + ' · ' + (p.barber === ANY ? 'ไม่ระบุช่าง' : p.barber) + ' ' + thDay(p.date) + ' ' + chk.start + '–' + (chk.pend ? '? (กันไว้ถึง ' + chk.end + ' รอช่างใส่เวลาเสร็จ)' : chk.end), share: qShareText(b, old ? 'edit' : 'new'), booking: b };
+    return { ok: true, id, msg: (old ? '✏️ เลื่อนคิว ' : '✅ จองคิว ') + id + ' · ' + (p.barber === ANY ? 'ไม่ระบุช่าง' : p.barber) + ' ' + thDay(p.date) + ' ' + chk.start + '–' + chk.end + (p.svc !== SVC_CUT ? ' (' + p.svc + ')' : ''), share: qShareText(b, old ? 'edit' : 'new'), booking: b };
   } finally { lock.releaseLock(); }
 }
 function qSetStatus(by, id, status, onlyBarber) {
@@ -173,25 +179,7 @@ function qSetStatus(by, id, status, onlyBarber) {
 function qShareText(b, kind) {
   if (!b) return '';
   const head = kind === 'cancel' ? '❌ ยกเลิกคิว #' : kind === 'edit' ? '✏️ เลื่อนคิว #' : '📅 จองคิว #';
-  return head + b.id + '\n' + b.shop + ' · ' + (b.name === ANY ? 'ไม่ระบุช่าง' : b.name) + (b.svc !== SVC_CUT ? ' · ' + b.svc : '') + '\n' + thDay(b.d) + ' ' + b.start + '–' + (b.pend ? '?' : b.end) + '\n' + b.cust + (b.phone ? ' ' + b.phone : '') + (b.ch ? ' (' + b.ch + ')' : '') + '\nลงโดย ' + b.by;
-}
-
-/** ช่างใส่เวลาเสร็จของคิวที่ไม่ใช่ตัดผม (ปิ๊กหรือช่างก็ได้) · คิวไม่ระบุช่าง → คนที่ใส่ = คนรับคิว */
-function qSetEnd(by, id, end, onlyBarber) {
-  const lock = LockService.getScriptLock(); lock.waitLock(15000);
-  try {
-    clearMemo(); const b = qById(id); if (!b) return { ok: false, msg: 'ไม่พบคิว ' + id };
-    if (b.svc === SVC_CUT) return { ok: false, msg: 'คิวตัดผมระบบคิดเวลาเสร็จให้แล้ว' };
-    if (!Q_ACTIVE.includes(b.status)) return { ok: false, msg: 'คิวนี้' + b.status + 'แล้ว' };
-    const atShop = onlyBarber && (dayRoster(b.d).find(r => r.name === onlyBarber) || {}).at === b.shop;
-    if (onlyBarber && b.name !== onlyBarber && !(b.name === ANY && atShop)) return { ok: false, msg: 'แก้ได้เฉพาะคิวของตัวเอง' };
-    const name = b.name === ANY && onlyBarber ? onlyBarber : b.name;
-    const chk = qCheck({ date: b.d, time: b.start, shop: b.shop, barber: name, svc: b.svc, end: end, force: true }, b.id);
-    if (!chk.ok) return chk;
-    const s = qSheet(); s.getRange(b.row, 3).setNumberFormat('@').setValue(chk.end); s.getRange(b.row, 5).setValue(name); s.getRange(b.row, 13).setValue(''); s.getRange(b.row, 16).setValue('');
-    const nb = qById(id);
-    return { ok: true, msg: '⏱️ ' + id + ' ' + nb.svc + ' ' + nb.start + '–' + nb.end + ' · ' + name, booking: nb, share: '⏱️ เวลาเสร็จ #' + id + '\n' + nb.shop + ' · ' + name + ' · ' + nb.svc + '\n' + thDay(nb.d) + ' ' + nb.start + '–' + nb.end + '\nลงโดย ' + by };
-  } finally { lock.releaseLock(); }
+  return head + b.id + '\n' + b.shop + ' · ' + (b.name === ANY ? 'ไม่ระบุช่าง' : b.name) + (b.svc !== SVC_CUT ? ' · ' + b.svc : '') + '\n' + thDay(b.d) + ' ' + b.start + '–' + b.end + '\n' + b.cust + (b.phone ? ' ' + b.phone : '') + (b.ch ? ' (' + b.ch + ')' : '') + '\nลงโดย ' + b.by;
 }
 
 /* ---------- วันเดียว (ตาราง) ---------- */
@@ -319,7 +307,6 @@ function qMyDay(tok, dStr) {
 }
 function qBook(tok, p) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; p = p || {}; if (!p.ch) p.ch = 'ช่างรับเอง'; return qSave(b.name, p, b.name); }
 function qMark(tok, id, status) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; return qSetStatus(b.name, id, status, b.name); }
-function qSetEndMe(tok, id, end) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; return qSetEnd(b.name, id, end, b.name); }
 function qCheckMe(tok, p) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; p = p || {}; p.barber = b.name; return qCheck(p, p.id || ''); }
 function leaveMe(tok, p) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; return leaveSave(b.name, p || {}, b.name); }
 function leaveCancelMe(tok, lid) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; return leaveCancel(b.name, lid, b.name); }
@@ -329,7 +316,7 @@ function qDayLine(name, dStr, shop) { const q = qRows(x => x.d === dStr && (x.na
 function qReplyFor(id) {
   const b = qById(id); if (!b) return '❓ ไม่พบคิว #' + id;
   if (!b.sent) qSheet().getRange(b.row, 13).setValue(nowText());
-  const when = thDay(b.d) + ' ' + b.start + '–' + (b.pend ? '? ⏳ (กันไว้ถึง ' + b.end + ' · ช่างใส่เวลาเสร็จในแอป)' : b.end) + ' (' + b.shop + ')' + (b.svc !== SVC_CUT ? '\nบริการ: ' + b.svc : '');
+  const when = thDay(b.d) + ' ' + b.start + '–' + b.end + ' (' + b.shop + ')' + (b.svc !== SVC_CUT ? '\nบริการ: ' + b.svc : '');
   // ช่างจอง/ยกเลิกคิวตัวเอง → แค่แจ้งกลุ่ม ไม่แท็ก ไม่ต้องกดไลก์ · คนอื่น (ส่วนใหญ่ปิ๊ก) จองให้ → แท็กช่าง + ขอให้กดไลก์รับทราบ
   const canceller = (/ยกเลิกโดย\s*(\S+)/.exec(b.note) || [])[1] || '';
   const isAny = b.name === ANY;
@@ -354,7 +341,6 @@ function leaveReplyFor(lid) {
   return '🚫 ⟪' + name + '⟫ ' + (r[0].reason || 'ลา') + ' ' + days.map(thDay).join(', ') + ' (อนุมัติแล้ว)\nวันนั้นจองคิว ' + name + ' ไม่ได้' + qList;
 }
 /** ช่างพิมพ์ "คิว" ในแชท OA → คิวของตัวเองวันนี้ + พรุ่งนี้ */
-function qEndReply(id) { const b = qById(id); if (!b) return '❓ ไม่พบคิว #' + id; if (!b.sent) qSheet().getRange(b.row, 13).setValue(nowText()); return b.pend ? '⏳ #' + b.id + ' ยังไม่ได้ใส่เวลาเสร็จ' : '⏱️ #' + b.id + ' ' + b.name + ' · ' + b.svc + '\n' + thDay(b.d) + ' ' + b.start + '–' + b.end + ' (' + b.shop + ') — ล็อกเวลาแล้ว'; }
 function qMineText(name) { const d0 = ymd(todayBkk()); return [d0, addDays(d0, 1)].map(d => { const r = dayRoster(d).find(x => x.name === name) || {}; return '📅 ' + thDay(d) + (r.at ? ' · ' + r.at : '') + '\n' + (r.off ? '🏖️ ' + r.off : (r.pend ? '⏳ ' + r.pend + '\n' : '') + qDayLine(name, d, r.at)); }).join('\n\n'); }
 /** "คิว" · "คิว ราม" · "คิว พรุ่งนี้" · "คิว 2026-11-08" */
 function qBoardText(arg) {
@@ -378,8 +364,7 @@ function groupEvent(ev) {
   const txt = String(ev.message.text || '').trim(); let m;
   const parts = [];
   const qs = txt.match(/#Q\d+/gi) || [], ls = txt.match(/#L\d+/gi) || [];
-  const endMsg = /⏱️|เวลาเสร็จ #Q/.test(txt); // ช่างใส่เวลาเสร็จ → ยืนยันเวลา ไม่แท็ก ไม่ต้องกดไลก์
-  qs.slice(0, 3).forEach(x => parts.push(endMsg ? qEndReply(x.slice(1).toUpperCase()) : qReplyFor(x.slice(1).toUpperCase())));
+  qs.slice(0, 3).forEach(x => parts.push(qReplyFor(x.slice(1).toUpperCase())));
   ls.slice(0, 2).forEach(x => parts.push(leaveReplyFor(x.slice(1).toUpperCase())));
   (txt.match(/#M\d+/gi) || []).slice(0, 2).forEach(x => parts.push(moveReplyFor(x.slice(1).toUpperCase())));
   if (!parts.length && (m = /^คิว(?:\s+(.+))?$/.exec(txt))) parts.push(qBoardText(m[1]));

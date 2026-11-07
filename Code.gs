@@ -190,7 +190,7 @@ function apiJson(p) {
       if (!v.ok) out = { ok: false, msg: v.msg };
       else { const tok = newSession(v.uid, v.name); out = { ok: true, tok, name: clean(v.name, 40), who: whoAmI(tok) }; }
     } else if (p.api === 'staff') {
-      const fns = { whoAmI, bindLine, sendManualMe, punch, cashTake, cashCollect, mySummary, mySlipPdf, qMyDay, qBook, qMark, qCheckMe, qSetEndMe, leaveMe, leaveCancelMe };
+      const fns = { whoAmI, bindLine, sendManualMe, punch, cashTake, cashCollect, mySummary, mySlipPdf, qMyDay, qBook, qMark, qCheckMe, leaveMe, leaveCancelMe };
       const fn = fns[String(p.fn || '')]; const args = Array.isArray(p.args) ? p.args : [];
       if (!fn) out = { ok: false, msg: 'ไม่รู้จักคำสั่ง' };
       else if (!session(args[0])) out = { ok: false, msg: 'หมดเวลา กรุณาปิดแล้วกดเมนูในไลน์ใหม่' };

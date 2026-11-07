@@ -86,17 +86,11 @@
     <div class="row"><div><label>วันที่</label><input type="date" id="bDate" onchange="bCheck()"></div><div><label>เวลา</label><select id="bTime" onchange="bCheck()"></select></div></div>
     <label>ร้าน</label><select id="bShop" onchange="bCheck()"></select>
     <label>บริการ <span class="mute">(ไม่เลือก = ตัดผม)</span></label><div class="seg" id="bN"><button data-v="cut" onclick="bSvc('cut')">✂️ ตัดผม</button><button data-v="other" onclick="bSvc('other')">อื่นๆ (ทำสี ดัด …)</button></div>
-    <div id="bO" class="hide"><div class="row"><div><label>บริการอะไร</label><input id="bSvcName" placeholder="เช่น ทำสี, ดัด"></div><div><label>เวลาเสร็จ</label><select id="bEnd" onchange="bCheck()"></select></div></div><div class="mute">ไม่รู้เวลาเสร็จ เลือก "ใส่ทีหลัง" ได้ — ระบบกันไว้ก่อน 2 ชม.ครึ่ง</div></div>
+    <div id="bO" class="hide"><label>บริการอะไร</label><input id="bSvcName" placeholder="เช่น ทำสี, ดัด"><div class="mute">ระบบกันเวลาไว้ 2 ชม.ครึ่ง</div></div>
     <div id="bChk" class="msg" style="white-space:pre-line"></div>
     <label>ชื่อลูกค้า</label><input id="bCust">
     <label>เบอร์โทร</label><input id="bPhone" inputmode="tel" placeholder="ถ้ามี">
     <button class="btn" id="bBtn" onclick="sendBook()">บันทึก</button><div id="bMsg" class="msg"></div>
-  </div></div>
-  <div class="modal" id="endBox"><div class="card">
-    <button class="x" onclick="close('endBox')">×</button><h2 id="eT">⏱️ เวลาเสร็จ</h2>
-    <div class="mute">ใส่เวลาที่คาดว่าจะเสร็จ — ระบบจะกันเวลาช่วงนี้ไว้ให้</div>
-    <input type="hidden" id="eId"><label>เสร็จประมาณ</label><select id="eSel"></select>
-    <button class="btn sec" onclick="sendEnd()">บันทึก</button><div id="eMsg" class="msg"></div>
   </div></div>
   <!-- ลาหยุด -->
   <div class="modal" id="leaveBox"><div class="card">
@@ -223,8 +217,7 @@
     let h='<div class="mute" style="margin-bottom:4px">'+escH(r.label)+' · ร้าน '+escH(r.shop)+'</div>';
     if(r.off) h+='<div class="off">🏖️ '+escH(r.off)+' — วันนี้ไม่รับคิว</div>';
     else if(!r.q.length) h+='<div class="mute" style="padding:8px 0">ยังไม่มีคิว</div>';
-    h+=r.q.map(x=>'<div class="qi '+(x.status==='มาแล้ว'?'done':x.status==='ไม่มา'?'no':'')+'"><div class="t">'+x.start+'</div><div class="c">'+(x.name==='ไม่ระบุ'?'<b style="color:#f2c14e">ไม่ระบุช่าง</b> · ':'')+escH(x.cust)+(x.phone?' · <a href="tel:'+escH(x.phone)+'" style="color:var(--ink)">'+escH(x.phone)+'</a>':'')+(x.svc&&x.svc!=='ตัดผม'?' · <b>'+escH(x.svc)+'</b>':'')+'<br><small>'+(x.pend?'⏳ ยังไม่ใส่เวลาเสร็จ':'ถึง '+x.end)+' · '+escH(x.ch)+' · '+escH(x.by)+(x.status!=='จอง'?' · <b>'+escH(x.status)+'</b>':'')+'</small></div>'
-      +(x.status==='จอง'&&x.pend?'<button onclick="openEnd(\''+x.id+'\',\''+x.start+'\')">⏱️ เวลาเสร็จ</button>':'')
+    h+=r.q.map(x=>'<div class="qi '+(x.status==='มาแล้ว'?'done':x.status==='ไม่มา'?'no':'')+'"><div class="t">'+x.start+'</div><div class="c">'+(x.name==='ไม่ระบุ'?'<b style="color:#f2c14e">ไม่ระบุช่าง</b> · ':'')+escH(x.cust)+(x.phone?' · <a href="tel:'+escH(x.phone)+'" style="color:var(--ink)">'+escH(x.phone)+'</a>':'')+(x.svc&&x.svc!=='ตัดผม'?' · <b>'+escH(x.svc)+'</b>':'')+'<br><small>ถึง '+x.end+' · '+escH(x.ch)+' · '+escH(x.by)+(x.status!=='จอง'?' · <b>'+escH(x.status)+'</b>':'')+'</small></div>'
       +(x.status==='จอง'?'<button onclick="qMark(\''+x.id+'\',\'มาแล้ว\')">✓ มา</button><button onclick="qMark(\''+x.id+'\',\'ไม่มา\')">✗</button>'+(x.by===r.name?'<button onclick="qCancel(\''+x.id+'\')">ยกเลิก</button>':''):'')+'</div>').join('');
     $('qBody').innerHTML=h;
     $('lvList').innerHTML=r.leaves.length?'<div style="margin-top:12px"><b style="font-size:14px">ใบลาของฉัน</b>'+r.leaves.map(l=>'<div class="qi"><div class="c">'+escH(l.label)+' · '+escH(l.reason)+'<br><small>'+(l.approved?'✅ อนุมัติแล้ว':'⏳ รอปิ๊กอนุมัติ')+'</small></div><button onclick="cancelLeave(\''+l.id+'\')">ยกเลิก</button></div>').join('')+'</div>':''; }
@@ -232,14 +225,14 @@
   async function qCancel(id){ if(!await ask('ยกเลิกคิว '+id+'?','ยกเลิกคิว')) return; const r=await run('qMark',TOK,id,'ยกเลิก'); if(!r.ok){ await ask(r.msg,'แจ้งเตือน',true); return; } loadQ(); if(r.share) shareOpen('❌ ยกเลิกคิวแล้ว — แจ้งกลุ่มว่าว่าง',r.share); }
   function openBook(){ const r=QD||{}; $('bDate').value=QDATE; $('bShop').innerHTML=(r.shops||WHO.shops.map(s=>s.name)).map(s=>'<option'+(s===r.shop?' selected':'')+'>'+s+'</option>').join('');
     const o=[]; for(let t=600;t<=1200;t+=30) o.push(fm(t)); const now=new Date(), nx=Math.ceil((now.getHours()*60+now.getMinutes())/30)*30; // เวลาทุกครึ่งชั่วโมง
-    $('bTime').innerHTML=o.map(t=>'<option'+(QDATE===ymdL(now)&&tm(t)===Math.max(nx,600)?' selected':'')+'>'+t+'</option>').join(''); $('bCust').value=''; $('bPhone').value=''; $('bMsg').style.display='none'; [...$('bN').children].forEach(b=>b.classList.remove('on')); $('bO').classList.add('hide'); $('bSvcName').value=''; const ends=[]; for(let t=630;t<=1290;t+=30) ends.push(fm(t)); $('bEnd').innerHTML='<option value="">ใส่ทีหลัง</option>'+ends.map(t=>'<option>'+t+'</option>').join(''); bCheck(); open('bookBox'); }
+    $('bTime').innerHTML=o.map(t=>'<option'+(QDATE===ymdL(now)&&tm(t)===Math.max(nx,600)?' selected':'')+'>'+t+'</option>').join(''); $('bCust').value=''; $('bPhone').value=''; $('bMsg').style.display='none'; [...$('bN').children].forEach(b=>b.classList.remove('on')); $('bO').classList.add('hide'); $('bSvcName').value=''; bCheck(); open('bookBox'); }
   function bSvc(k){ [...$('bN').children].forEach(b=>b.classList.toggle('on',b.dataset.v===k)); $('bO').classList.toggle('hide',k!=='other'); bCheck(); }
   const isOther=()=>($('bN').querySelector('.on')||{dataset:{}}).dataset.v==='other';
-  const bP=()=>({date:$('bDate').value,time:$('bTime').value,shop:$('bShop').value,svc:isOther()?($('bSvcName').value.trim()||'อื่นๆ'):'ตัดผม',end:isOther()?$('bEnd').value:'',cust:$('bCust').value,phone:$('bPhone').value});
+  const bP=()=>({date:$('bDate').value,time:$('bTime').value,shop:$('bShop').value,svc:isOther()?($('bSvcName').value.trim()||'อื่นๆ'):'ตัดผม',cust:$('bCust').value,phone:$('bPhone').value});
   let _bc=0, BST='';
   async function bCheck(){ const my=++_bc; show('bChk','กำลังเช็กเวลาว่าง…','warn'); const r=await run('qCheckMe',TOK,bP()); if(my!==_bc) return;
     BST=r.ok?'ok':r.warn?'warn':'block'; $('bBtn').disabled=BST==='block'; $('bBtn').textContent=BST==='warn'?'ยืนยันจองคิว':'บันทึก';
-    if(r.ok){ show('bChk','✓ ว่าง '+r.start+'–'+r.end+(r.pend?' (กันไว้ก่อน 2 ชม.ครึ่ง)':''),'ok'); return; }
+    if(r.ok){ show('bChk','✓ ว่าง '+r.start+'–'+r.end,'ok'); return; }
     show('bChk',r.msg,r.warn?'warn':'err'); if((r.suggest||[]).length) $('bChk').innerHTML=escH(r.msg)+'<div style="margin-top:6px">เวลาว่างใกล้สุด: '+r.suggest.map(t=>'<button class="chip" onclick="$(\'bTime\').value=\''+t+'\';bCheck()">'+t+'</button>').join(' ')+'</div>'; }
   async function sendBook(){ if(BST==='block') return; if(!$('bCust').value.trim()){ show('bMsg','ใส่ชื่อลูกค้า','err'); return; } $('bBtn').disabled=true; show('bMsg','กำลังบันทึก…','warn');
     try{ const p=bP(); p.force=BST==='warn'; const r=await run('qBook',TOK,p); $('bBtn').disabled=false; if(!r.ok){ show('bMsg',r.msg,'err'); bCheck(); return; } close('bookBox'); loadQ(p.date); shareOpen(r.msg,r.share); }catch(e){ $('bBtn').disabled=false; show('bMsg','เชื่อมต่อไม่ได้','err'); } }
@@ -250,8 +243,6 @@
       close('leaveBox'); loadQ(); shareOpen(r.msg,r.share); }catch(e){ $('lBtn').disabled=false; show('lMsg','เชื่อมต่อไม่ได้','err'); } }
   async function sickToday(){ const t=ymdL(new Date()); if(!await ask('ลาป่วยวันนี้ ('+new Date().toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short'})+')?\nระบบส่งคำขอให้ปิ๊กอนุมัติ และแจ้งคิวลูกค้าที่ต้องย้าย','🤒 ลาป่วยวันนี้')) return;
     try{ const r=await run('leaveMe',TOK,{from:t,to:t,reason:'ลาป่วย',note:'ป่วย (กดจากปุ่มลาป่วย)',force:true}); if(!r.ok){ await ask(r.msg,'แจ้งเตือน',true); return; } loadQ(t); shareOpen(r.msg,r.share); }catch(e){ await ask('เชื่อมต่อไม่ได้','แจ้งเตือน',true); } }
-  async function openEnd(id,start){ const o=[]; for(let t=tm(start)+30;t<=1290;t+=30) o.push(fm(t)); $('eSel').innerHTML=o.map(t=>'<option>'+t+'</option>').join(''); $('eId').value=id; $('eT').textContent='⏱️ เวลาเสร็จ คิว '+id+' (เริ่ม '+start+')'; $('eMsg').style.display='none'; open('endBox'); }
-  async function sendEnd(){ show('eMsg','กำลังบันทึก…','warn'); try{ const r=await run('qSetEndMe',TOK,$('eId').value,$('eSel').value); if(!r.ok){ show('eMsg',r.msg,'err'); return; } close('endBox'); loadQ(); shareOpen(r.msg,r.share); }catch(e){ show('eMsg','เชื่อมต่อไม่ได้','err'); } }
   async function cancelLeave(id){ if(!await ask('ยกเลิกใบลา '+id+'?','ยกเลิกลา')) return; const r=await run('leaveCancelMe',TOK,id); if(!r.ok){ await ask(r.msg,'แจ้งเตือน',true); return; } loadQ(); shareOpen(r.msg,r.share); }
   start();
 </script>
