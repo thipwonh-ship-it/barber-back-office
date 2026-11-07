@@ -108,7 +108,8 @@ function qCheck(p, excludeId) {
   const dur = cut ? qDur(shop) : Q_HOLD; const e = s + dur;
   const today = ymd(todayBkk());
   if (d < today || (d === today && s < nowMin() - 30)) return { ok: false, block: true, msg: '⛔ เวลานี้ผ่านไปแล้ว' };
-  if (s < toMin(hrs.open) || e > toMin(hrs.close)) return { ok: false, block: true, msg: '⛔ ร้าน ' + shop + ' รับคิว ' + hrs.open + '–' + fromMin(toMin(hrs.close) - dur) + ' (ปิด ' + hrs.close + ')' };
+  const lastStart = toMin(hrs.close) - 60; // คิวสุดท้าย 20:00 ทุกร้าน ทุกบริการ (บริการอื่นๆ เสร็จเลยเวลาปิดได้)
+  if (s < toMin(hrs.open) || s > lastStart) return { ok: false, block: true, msg: '⛔ ร้าน ' + shop + ' รับคิว ' + hrs.open + '–' + fromMin(lastStart) };
   const roster = dayRoster(d); const isAny = name === ANY;
   const me = isAny ? null : roster.find(r => r.name === name); if (!isAny && !me) return { ok: false, block: true, msg: 'ไม่พบช่าง ' + name };
   const busy = qRows(x => x.d === d && Q_ACTIVE.includes(x.status) && x.id !== excludeId);
@@ -120,10 +121,13 @@ function qCheck(p, excludeId) {
   const anyAt = (a, b) => busy.filter(x => x.name === ANY && x.shop === shop && ov(x, a, b)).length;
   const okAt = (a, b) => isAny ? freeAt(a, b) > anyAt(a, b) : !clash(name, a, b) && (!me || me.at !== shop || freeAt(a, b, name) >= anyAt(a, b));
   const others = shopB.filter(r => r.name !== name && !clash(r.name, s, e)).map(r => r.name);
-  const suggest = () => { const lo = Math.max(toMin(hrs.open), d === today ? Math.ceil(nowMin() / 30) * 30 : 0), hi = toMin(hrs.close) - dur; const c = []; for (let t = Math.ceil(lo / 30) * 30; t <= hi; t += 30) if (okAt(t, t + dur)) c.push(t); c.sort((a, b) => Math.abs(a - s) - Math.abs(b - s) || a - b); return c.slice(0, 3).sort((a, b) => a - b).map(fromMin); };
+  const suggest = () => { const lo = Math.max(toMin(hrs.open), d === today ? Math.ceil(nowMin() / 30) * 30 : 0), hi = lastStart; const c = []; for (let t = Math.ceil(lo / 30) * 30; t <= hi; t += 30) if (okAt(t, t + dur)) c.push(t); c.sort((a, b) => Math.abs(a - s) - Math.abs(b - s) || a - b); return c.slice(0, 3).sort((a, b) => a - b).map(fromMin); };
+  // บริการอื่นๆ ที่คนอื่น (ปิ๊ก) จองให้ → เตือนให้ถามช่างก่อน · ช่างจองเองไม่ต้องเตือน
+  const askMsg = !cut && !p.self ? 'บริการ ' + p.svc + ' (กันไว้ 2 ชม.ครึ่ง ' + fromMin(s) + '–' + fromMin(e) + (e > toMin(hrs.close) ? ' · เลยเวลาปิดร้าน' : '') + ') — ถามช่างก่อนว่ารับได้ไหม' : '';
   if (isAny) {
     if (!shopB.length) return { ok: false, block: true, msg: '⛔ ' + thDay(d) + ' ร้าน ' + shop + ' ไม่มีช่างเข้า — จองไม่ได้' };
     if (!okAt(s, e)) return { ok: false, block: true, msg: '⛔ ร้าน ' + shop + ' ช่างไม่ว่างเวลานี้ (ช่างว่าง ' + freeAt(s, e) + ' คน · คิวไม่ระบุช่าง ' + anyAt(s, e) + ' คิว)', suggest: suggest() };
+    if (askMsg && !p.force) return { ok: false, warn: true, msg: '⚠️ ' + askMsg + '\nยืนยันจอง?' };
     return { ok: true, start: fromMin(s), end: fromMin(e), team: shopB.map(r => r.name) };
   }
   if (me.off) return { ok: false, block: true, msg: '⛔ ' + name + ' ' + me.off + ' ' + thDay(d) + ' — จองไม่ได้', others };
@@ -135,8 +139,8 @@ function qCheck(p, excludeId) {
   const ovNoSoft = (a, b) => busy.filter(x => x.name === name && ov(x, a, b) && !soft.includes(x)).length;
   if (soft.length && ovNoSoft(s, e)) return { ok: false, block: true, msg: '⛔ ' + name + ' ไม่ว่างเวลานี้', suggest: suggest(), others };
   if (!soft.length && !okAt(s, e)) return { ok: false, block: true, msg: '⛔ เวลานี้มีคิวไม่ระบุช่างรอช่างร้าน ' + shop + ' อยู่ — ถ้า ' + name + ' รับคิวนี้ ช่างจะไม่พอ', suggest: suggest(), others };
-  const warns = []; if (me.pend) warns.push(name + ' ' + me.pend + ' ' + thDay(d)); if (me.at !== shop) warns.push(thDay(d) + ' ' + name + ' ประจำร้าน ' + me.at + (me.cover ? ' (ไปแทนช่างที่หยุด)' : me.moved ? ' (ปิ๊กย้ายไปช่วย)' : ''));
-  if (warns.length && !p.force) return { ok: false, warn: true, msg: '⚠️ ' + warns.join('\n⚠️ ') + '\nยืนยันจองที่ร้าน ' + shop + '?', others };
+  const warns = []; if (askMsg) warns.push(askMsg); if (me.pend) warns.push(name + ' ' + me.pend + ' ' + thDay(d)); if (me.at !== shop) warns.push(thDay(d) + ' ' + name + ' ประจำร้าน ' + me.at + (me.cover ? ' (ไปแทนช่างที่หยุด)' : me.moved ? ' (ปิ๊กย้ายไปช่วย)' : ''));
+  if (warns.length && !p.force) return { ok: false, warn: true, msg: '⚠️ ' + warns.join('\n⚠️ ') + '\nยืนยันจอง?', others };
   return { ok: true, start: fromMin(s), end: fromMin(e), trim: soft.map(x => x.id) };
 }
 
@@ -305,9 +309,9 @@ function qMyDay(tok, dStr) {
   return { ok: true, date: dStr, label: thDay(dStr), name: b.name, shop, off: me.off, open: hrs.open, close: hrs.close, dur: qDur(shop), shops: shops().map(s => s.name), reasons: LEAVE_REASONS,
     q: qRows(x => x.d === dStr && (x.name === b.name || (x.name === ANY && x.shop === shop && !me.off)) && x.status !== 'ยกเลิก').sort((a, c) => a.start < c.start ? -1 : 1).map(x => Object.assign(x, { share: qShareText(x, 'new') })), leaves: leaveList(b.name) };
 }
-function qBook(tok, p) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; p = p || {}; if (!p.ch) p.ch = 'ช่างรับเอง'; return qSave(b.name, p, b.name); }
+function qBook(tok, p) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; p = p || {}; if (!p.ch) p.ch = 'ช่างรับเอง'; p.self = true; return qSave(b.name, p, b.name); }
 function qMark(tok, id, status) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; return qSetStatus(b.name, id, status, b.name); }
-function qCheckMe(tok, p) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; p = p || {}; p.barber = b.name; return qCheck(p, p.id || ''); }
+function qCheckMe(tok, p) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; p = p || {}; p.barber = b.name; p.self = true; return qCheck(p, p.id || ''); }
 function leaveMe(tok, p) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; return leaveSave(b.name, p || {}, b.name); }
 function leaveCancelMe(tok, lid) { const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา' }; return leaveCancel(b.name, lid, b.name); }
 
