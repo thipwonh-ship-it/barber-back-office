@@ -8,7 +8,7 @@
 const SH_Q = 'คิว';
 const Q_HEAD = ['วันที่', 'เริ่ม', 'จบ', 'ร้าน', 'ช่าง', 'ลูกค้า', 'เบอร์', 'ช่องทาง', 'สถานะ', 'ผู้ลง', 'ลงเมื่อ', 'รหัส', 'แจ้งกลุ่มเมื่อ', 'หมายเหตุ', 'บริการ', 'รอเวลาเสร็จ'];
 // บริการ: "ตัดผม" = ระบบคิดเวลาเสร็จเอง (40/50 นาที) · อื่นๆ (ทำสี ดัด …) = ปิ๊กจองเวลาเริ่ม ระบบกันไว้ก่อน Q_HOLD นาที → ช่างใส่เวลาเสร็จในแอป
-const SVC_CUT = 'ตัดผม', Q_HOLD = 60;
+const SVC_CUT = 'ตัดผม', Q_HOLD = 150; // อื่นๆ ที่ยังไม่มีเวลาเสร็จ กันไว้ 2 ชม.ครึ่ง (ทิพย์กำหนด 7 พ.ย. — คิวยังไม่เยอะ ถ้ามีคิวถัดไปปิ๊กถามช่าง)
 const Q_ACTIVE = ['จอง', 'มาแล้ว'], Q_STATUS = ['จอง', 'มาแล้ว', 'ไม่มา', 'ยกเลิก'];
 const Q_CHANNELS = ['โทร', 'LINE', 'Facebook', 'ช่างรับเอง', 'อื่นๆ'];
 const ANY = 'ไม่ระบุ'; // คิวไม่ระบุช่าง: ช่างที่อยู่ร้านนั้นวันนั้นสลับรับกันเอง · กินช่างว่าง 1 คนในช่วงเวลานั้น
@@ -105,7 +105,7 @@ function qCheck(p, excludeId) {
   const s = toMin(p.time); if (s < 0) return { ok: false, block: true, msg: 'เลือกเวลา' };
   const cut = !p.svc || p.svc === SVC_CUT, endM = toMin(p.end);
   if (!cut && endM >= 0 && endM <= s) return { ok: false, block: true, msg: '⛔ เวลาเสร็จต้องหลังเวลาเริ่ม' };
-  const dur = cut ? qDur(shop) : endM > s ? endM - s : Q_HOLD; const e = s + dur; // อื่นๆ ไม่มีเวลาเสร็จ → กันไว้ก่อน 1 ชม.
+  const dur = cut ? qDur(shop) : endM > s ? endM - s : Q_HOLD; const e = s + dur; // อื่นๆ ไม่มีเวลาเสร็จ → กันไว้ก่อน Q_HOLD นาที
   const today = ymd(todayBkk());
   if (d < today || (d === today && s < nowMin() - 30)) return { ok: false, block: true, msg: '⛔ เวลานี้ผ่านไปแล้ว' };
   if (s < toMin(hrs.open) || e > toMin(hrs.close)) return { ok: false, block: true, msg: '⛔ ร้าน ' + shop + ' รับคิว ' + hrs.open + '–' + fromMin(toMin(hrs.close) - dur) + ' (ปิด ' + hrs.close + ')' };
