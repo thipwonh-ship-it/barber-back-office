@@ -247,6 +247,8 @@ function barberSave(p) {
  * ตั้งค่า!B75 ร้าน · B76 ยอดยกมา · B77 ณ เช้าวันที่
  * แผ่น "บัญชีผู้จัดการ": A รหัส B วันที่ C ชนิด(ออก/ยอดจริง) D ประเภท E ร้าน F ช่าง G จำนวน H รายละเอียด I สถานะ J ผู้บันทึก K บันทึกเมื่อ L ลิงก์สลิป M ยอดควรมีตอนกรอก */
 const SH_BANK = 'บัญชีผู้จัดการ', BANK_FROM = 'บัญชีผู้จัดการ', BANK_OTHER = ['ส่วนตัว (ไม่ใช่ร้าน)', 'ส่งเงินให้ owner'];
+// ประเภทเพิ่มเฉพาะบัญชีผู้จัดการ (ค่าใช้จ่ายร้าน) → ลงแผ่นรายจ่ายเป็น อื่นๆ (P&L มีคอลัมน์ตายตัว) รายละเอียดขึ้นต้นด้วยชื่อประเภท
+const BANK_EXTRA = { 'ค่าน้ำมัน': 'อื่นๆ', 'ค่าทางด่วน': 'อื่นๆ' };
 function bankSheet() {
   let s = ss().getSheetByName(SH_BANK); if (s) return s;
   s = ss().insertSheet(SH_BANK); s.getRange('A1:M1').setValues([['รหัส', 'วันที่', 'ชนิด', 'ประเภท', 'ร้าน', 'ช่าง', 'จำนวน', 'รายละเอียด', 'สถานะ', 'ผู้บันทึก', 'บันทึกเมื่อ', 'ลิงก์สลิป', 'ยอดควรมีตอนกรอก']]).setFontWeight('bold'); s.setFrozenRows(1);
@@ -276,12 +278,12 @@ function bankData() {
   const tot = { warn: list.filter(o => o.warn).length, in: list.reduce((a, o) => a + o.in, 0), pond: list.reduce((a, o) => a + o.pond, 0), out: list.reduce((a, o) => a + o.out, 0) };
   const balance = c.open == null ? null : c.open + tot.in - tot.pond - tot.out;
   const checks = rows.filter(x => x.kind === 'ยอดจริง' && x.status !== 'ยกเลิก').slice(-5).reverse().map(x => ({ id: x.id, d: x.d, at: x.at, by: x.by, actual: x.amt, expect: x.expect, diff: x.expect == null ? null : x.amt - x.expect, link: x.link }));
-  return { ok: true, shop: c.shop, from, open: c.open, balance, tot, days: list.reverse().slice(0, 40), outs: byDateDesc(rows.filter(x => x.kind === 'ออก')).slice(0, 60).map(x => ({ id: x.id, d: x.d, type: x.type, shop: x.shop, name: x.name, amt: x.amt, detail: x.detail, status: x.status, by: x.by, at: x.at, link: x.link })), checks, types: expenseTypes().filter(t => t !== 'โบนัส').concat(BANK_OTHER) };
+  return { ok: true, shop: c.shop, from, open: c.open, balance, tot, days: list.reverse().slice(0, 40), outs: byDateDesc(rows.filter(x => x.kind === 'ออก')).slice(0, 60).map(x => ({ id: x.id, d: x.d, type: x.type, shop: x.shop, name: x.name, amt: x.amt, detail: x.detail, status: x.status, by: x.by, at: x.at, link: x.link })), checks, types: expenseTypes().filter(t => t !== 'โบนัส').concat(Object.keys(BANK_EXTRA), BANK_OTHER) };
 }
 /** manager ลงรายการออก (โทรขออนุญาต owner แล้ว) · ประเภทร้าน → ลงแผ่นรายจ่ายด้วย (จ่ายจาก บัญชีผู้จัดการ) เพื่อให้ P&L / หักเบิกช่าง ถูก */
 function bankOut(a, p) {
   const day = parseYmd(p.date) || todayBkk(); const type = clean(p.type, 30); const amt = num(p.amount); const detail = clean(p.detail, 150);
-  const shopType = expenseTypes().includes(type) && type !== 'โบนัส';
+  const shopType = (expenseTypes().includes(type) && type !== 'โบนัส') || !!BANK_EXTRA[type]; const xType = BANK_EXTRA[type] || type;
   if (!(amt > 0)) return { ok: false, msg: 'ใส่จำนวนเงิน' };
   if (!shopType && !BANK_OTHER.includes(type)) return { ok: false, msg: 'ประเภทไม่ถูกต้อง' };
   if (!detail) return { ok: false, msg: 'ใส่รายละเอียด (ใช้ทำอะไร)' };
@@ -292,7 +294,7 @@ function bankOut(a, p) {
     let link = ''; if (p.image) { const f = saveImage(p.image, 'บัญชีผู้จัดการ ' + ym(day), ymd(day) + ' ' + type + ' ' + money(amt), false); if (f) link = f.url; }
     const id = 'B' + seq('B_SEQ'); const s = bankSheet();
     s.appendRow([id, day, 'ออก', type, shop, name, amt, detail, 'บันทึก', a.name, nowText(), link, '']);
-    if (shopType) { const x = sh(SH_EXP); const row = x.getLastRow() + 1; x.getRange(row, 1, 1, X_LINK).setValues([[day, shop, type, name, amt, detail + ' [#' + id + ']', a.name, link]]); x.getRange(row, X_FROM).setValue(BANK_FROM); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd'); }
+    if (shopType) { const x = sh(SH_EXP); const row = x.getLastRow() + 1; x.getRange(row, 1, 1, X_LINK).setValues([[day, shop, xType, name, amt, (BANK_EXTRA[type] ? type + ': ' : '') + detail + ' [#' + id + ']', a.name, link]]); x.getRange(row, X_FROM).setValue(BANK_FROM); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd'); }
     if (type === 'เบิกช่าง') pushBarber(name, '📝 บันทึกเบิกล่วงหน้า ' + money(amt) + ' บาท (' + ymd(day) + ') จะหักจากค่าแรงสิ้นเดือน');
     return { ok: true, msg: 'บันทึก #' + id + ' ' + type + ' ' + money(amt) + ' บาท', data: bankData() };
   } finally { lock.releaseLock(); }
