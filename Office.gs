@@ -25,6 +25,9 @@ function officeApi(a, p) {
     case 'bank_cancel': return bankCancel(a, p);
     case 'bank_check': return bankCheck(a, p);
     case 'bank_open': if (!owner) return deny(); return bankOpen(p);
+    // ร้านช่างปิ๊ก: manager บันทึกหัว/วัน · owner ดู
+    case 'home': return homeData();
+    case 'home_save': return homeSave(a, p);
     // ระบบคิว + ลาหยุด (Queue.gs) · อนุมัติลา = ผู้จัดการ (ปิ๊ก) เท่านั้น · Owner ดูอย่างเดียว
     case 'q_save': case 'q_status': case 'lv_save': case 'lv_cancel': case 'lv_approve': case 'mv_save': case 'mv_cancel': a = Object.assign({}, a, { name: owner ? 'ทิพย์' : 'ปิ๊ก' }); break;
     default: break;
@@ -80,7 +83,7 @@ function todayData(dateStr) {
   const punched = t.map(r => r.name); const notYet = act.filter(b => !punched.includes(b.name)).map(b => b.name);
   const ymStr = day.slice(0, 7); const tg = targets(ymStr); const md = dailyRows(r => r.d.slice(0, 7) === ymStr);
   const mtd = S.map(s => ({ shop: s, heads: md.filter(r => r.shop === s).reduce((a, r) => a + r.heads, 0), target: tg[s] || 0, sales: md.filter(r => r.shop === s).reduce((a, r) => a + r.sales, 0) }));
-  return { ok: true, date: day, byShop, notYet, mtd, cash: cashBalance(), pond: pondData().today, recent: byDateDesc(expenseRows(ymStr)).slice(0, 8), lastCollect: byDateDesc(cashRows()).slice(0, 3), bank: (() => { try { const b = bankData(); return { balance: b.balance, open: b.open, from: b.from, last: b.days[0] || null, check: b.checks[0] || null }; } catch (e) { return null; } })(), perBarber: d.map(r => ({ name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid })).sort((a, b) => S.indexOf(a.shop) - S.indexOf(b.shop) || (a.name < b.name ? -1 : 1)) };
+  return { ok: true, date: day, byShop, notYet, mtd, cash: cashBalance(), pond: pondData().today, recent: byDateDesc(expenseRows(ymStr)).slice(0, 8), lastCollect: byDateDesc(cashRows()).slice(0, 3), home: (() => { try { return homeData(); } catch (e) { return null; } })(), bank: (() => { try { const b = bankData(); return { balance: b.balance, open: b.open, from: b.from, last: b.days[0] || null, check: b.checks[0] || null }; } catch (e) { return null; } })(), perBarber: d.map(r => ({ name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid })).sort((a, b) => S.indexOf(a.shop) - S.indexOf(b.shop) || (a.name < b.name ? -1 : 1)) };
 }
 
 /* ---------- รายเดือน ---------- */
@@ -329,4 +332,37 @@ function bankOpen(p) {
   const d = parseYmd(p.date); if (!d) return { ok: false, msg: 'วันที่ไม่ถูกต้อง' }; if (p.amount === '' || !isFinite(Number(p.amount))) return { ok: false, msg: 'ใส่ยอด' };
   bankCfg(); const s = sh(SH_SET); s.getRange('B76').setValue(num(p.amount)); s.getRange('B77').setValue(d).setNumberFormat('yyyy-mm-dd');
   return { ok: true, msg: 'ตั้งยอดยกมา ' + money(p.amount) + ' ณ เช้า ' + p.date, data: bankData() };
+}
+
+/* ---------- ร้านช่างปิ๊ก (ร้านที่บ้านของ manager ตัดเอง) ----------
+ * owner อยากรู้แค่ว่าแต่ละวันมีลูกค้ามาตัดกี่หัว — ไม่เก็บเงิน ไม่เข้ายอด/ค่าแรง/กำไรของ 3 ร้าน
+ * แผ่น "ร้านช่างปิ๊ก": A วันที่ B หัว C สถานะ(เปิด/ไม่ได้เปิด) D หมายเหตุ E ผู้บันทึก F บันทึกเมื่อ · 1 แถว/วัน */
+const SH_HOME = 'ร้านช่างปิ๊ก';
+function homeSheet() {
+  let s = ss().getSheetByName(SH_HOME); if (s) return s;
+  s = ss().insertSheet(SH_HOME); s.getRange('A1:F1').setValues([['วันที่', 'หัว', 'สถานะ', 'หมายเหตุ', 'ผู้บันทึก', 'บันทึกเมื่อ']]).setFontWeight('bold'); s.setFrozenRows(1);
+  s.getRange('A:A').setNumberFormat('yyyy-mm-dd'); s.getRange('B:B').setNumberFormat('0'); return s;
+}
+function homeRows() {
+  const s = ss().getSheetByName(SH_HOME); if (!s || s.getLastRow() < 2) return [];
+  return s.getRange(2, 1, s.getLastRow() - 1, 6).getValues().map((r, i) => ({ row: i + 2, d: dateKey(r[0]), heads: num(r[1]), closed: String(r[2]) === 'ไม่ได้เปิด', note: String(r[3] || ''), by: String(r[4] || ''), at: String(r[5] || '') })).filter(x => x.d >= START_DATE);
+}
+function homeData() {
+  const rows = homeRows(); const today = todayBkk(); const map = {}; rows.forEach(x => map[x.d] = x);
+  const days = []; for (let i = 0; i < 30; i++) { const d = ymd(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)); if (d < START_DATE) break; const x = map[d]; days.push({ d, heads: x ? x.heads : null, closed: x ? x.closed : false, note: x ? x.note : '' }); }
+  const ymStr = ymd(today).slice(0, 7); const m = rows.filter(x => x.d.slice(0, 7) === ymStr);
+  return { ok: true, days, month: { ym: ymStr, heads: m.reduce((a, x) => a + (x.closed ? 0 : x.heads), 0), open: m.filter(x => !x.closed && x.heads > 0).length, recorded: m.length } };
+}
+/** manager บันทึกจำนวนหัวของวันนั้น (บันทึกซ้ำวันเดิม = แก้) · closed = ไม่ได้เปิด */
+function homeSave(a, p) {
+  if (a.role === 'owner') return { ok: false, msg: 'owner ดูอย่างเดียว — ให้ manager บันทึก' };
+  const day = parseYmd(p.date); if (!day) return { ok: false, msg: 'วันที่ไม่ถูกต้อง' }; if (ymd(day) > ymd(todayBkk())) return { ok: false, msg: 'บันทึกล่วงหน้าไม่ได้' };
+  const closed = !!p.closed; const heads = closed ? 0 : Math.round(num(p.heads));
+  if (!closed && (p.heads === '' || p.heads == null || heads < 0)) return { ok: false, msg: 'ใส่จำนวนหัว (0 ได้)' };
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const s = homeSheet(); const cur = homeRows().find(x => x.d === ymd(day)); const row = cur ? cur.row : s.getLastRow() + 1;
+    s.getRange(row, 1, 1, 6).setValues([[day, heads, closed ? 'ไม่ได้เปิด' : 'เปิด', clean(p.note, 100), a.name, nowText()]]); s.getRange(row, 1).setNumberFormat('yyyy-mm-dd');
+    return { ok: true, msg: 'ร้านช่างปิ๊ก ' + ymd(day).slice(5) + ': ' + (closed ? 'ไม่ได้เปิด' : heads + ' หัว') + (cur ? ' (แก้แล้ว)' : ''), data: homeData() };
+  } finally { lock.releaseLock(); }
 }
