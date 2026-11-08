@@ -19,6 +19,12 @@ function officeApi(a, p) {
     case 'close_month': if (!owner) return deny(); return closeMonth(p.ym);
     case 'paid': if (!owner) return deny(); return confirmPaid(p.ym, p.slips || {});
     case 'barber_save': if (!owner) return deny(); return barberSave(p);
+    // บัญชีผู้จัดการ: manager ลง (โทรขออนุญาต owner แล้ว) · owner ดู + ตั้งยอดยกมา
+    case 'bank': return bankData();
+    case 'bank_out': return bankOut(a, p);
+    case 'bank_cancel': return bankCancel(a, p);
+    case 'bank_check': return bankCheck(a, p);
+    case 'bank_open': if (!owner) return deny(); return bankOpen(p);
     // ระบบคิว + ลาหยุด (Queue.gs) · อนุมัติลา = ผู้จัดการ (ปิ๊ก) เท่านั้น · Owner ดูอย่างเดียว
     case 'q_save': case 'q_status': case 'lv_save': case 'lv_cancel': case 'lv_approve': case 'mv_save': case 'mv_cancel': a = Object.assign({}, a, { name: owner ? 'ทิพย์' : 'ปิ๊ก' }); break;
     default: break;
@@ -74,7 +80,7 @@ function todayData(dateStr) {
   const punched = t.map(r => r.name); const notYet = act.filter(b => !punched.includes(b.name)).map(b => b.name);
   const ymStr = day.slice(0, 7); const tg = targets(ymStr); const md = dailyRows(r => r.d.slice(0, 7) === ymStr);
   const mtd = S.map(s => ({ shop: s, heads: md.filter(r => r.shop === s).reduce((a, r) => a + r.heads, 0), target: tg[s] || 0, sales: md.filter(r => r.shop === s).reduce((a, r) => a + r.sales, 0) }));
-  return { ok: true, date: day, byShop, notYet, mtd, cash: cashBalance(), pond: pondData().today, recent: byDateDesc(expenseRows(ymStr)).slice(0, 8), lastCollect: byDateDesc(cashRows()).slice(0, 3), perBarber: d.map(r => ({ name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid })).sort((a, b) => S.indexOf(a.shop) - S.indexOf(b.shop) || (a.name < b.name ? -1 : 1)) };
+  return { ok: true, date: day, byShop, notYet, mtd, cash: cashBalance(), pond: pondData().today, recent: byDateDesc(expenseRows(ymStr)).slice(0, 8), lastCollect: byDateDesc(cashRows()).slice(0, 3), bank: (() => { try { const b = bankData(); return { balance: b.balance, open: b.open, from: b.from, last: b.days[0] || null, check: b.checks[0] || null }; } catch (e) { return null; } })(), perBarber: d.map(r => ({ name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid })).sort((a, b) => S.indexOf(a.shop) - S.indexOf(b.shop) || (a.name < b.name ? -1 : 1)) };
 }
 
 /* ---------- รายเดือน ---------- */
@@ -232,4 +238,89 @@ function barberSave(p) {
   s.getRange(row, 1, 1, 9).setValues([vals]); s.getRange(row, B_START, 1, 2).setNumberFormat('yyyy-mm-dd');
   if (p.unbind) s.getRange(row, B_LINE).clearContent();
   return { ok: true, msg: (b ? 'แก้ไข ' : 'เพิ่ม ') + name + ' แล้ว' + (b ? '' : ' — ให้ช่างเปิดเมนู "ลงเวลา" ในไลน์ แล้วใส่ PIN ' + clean(p.pin, 10)) };
+}
+
+/* ---------- บัญชีผู้จัดการ (manager) — บัญชีที่รับโอนลูกค้าโลตัส ----------
+ * ยอดควรมี = ยอดยกมา + สลิปลูกค้าร้านที่ตั้งไว้ (ไม่นับ ซ้ำ/สมุด/ไม่ใช่สลิป) − โอนรายวัน (ปอน) − รายการออกที่ manager ลง
+ * รายการออก: manager โทรขออนุญาต owner ก่อน แล้วลงเอง (ไม่มีขั้นอนุมัติในแอป) · owner ดูใน Dashboard
+ * ตั้งค่า!B75 ร้าน · B76 ยอดยกมา · B77 ณ เช้าวันที่
+ * แผ่น "บัญชีผู้จัดการ": A รหัส B วันที่ C ชนิด(ออก/ยอดจริง) D ประเภท E ร้าน F ช่าง G จำนวน H รายละเอียด I สถานะ J ผู้บันทึก K บันทึกเมื่อ L ลิงก์สลิป M ยอดควรมีตอนกรอก */
+const SH_BANK = 'บัญชีผู้จัดการ', BANK_FROM = 'บัญชีผู้จัดการ', BANK_OTHER = ['ส่วนตัว (ไม่ใช่ร้าน)', 'ส่งเงินให้ owner'];
+function bankSheet() {
+  let s = ss().getSheetByName(SH_BANK); if (s) return s;
+  s = ss().insertSheet(SH_BANK); s.getRange('A1:M1').setValues([['รหัส', 'วันที่', 'ชนิด', 'ประเภท', 'ร้าน', 'ช่าง', 'จำนวน', 'รายละเอียด', 'สถานะ', 'ผู้บันทึก', 'บันทึกเมื่อ', 'ลิงก์สลิป', 'ยอดควรมีตอนกรอก']]).setFontWeight('bold'); s.setFrozenRows(1);
+  s.getRange('B:B').setNumberFormat('yyyy-mm-dd'); s.getRange('G:G').setNumberFormat('#,##0'); s.getRange('M:M').setNumberFormat('#,##0'); return s;
+}
+function bankCfg() {
+  const s = sh(SH_SET); const v = s.getRange('A75:B77').getValues();
+  if (!v[0][0]) { s.getRange('A75:B77').setValues([['บัญชีผู้จัดการ: ร้านที่ลูกค้าโอนเข้า', 'โลตัส'], ['บัญชีผู้จัดการ: ยอดยกมา', ''], ['บัญชีผู้จัดการ: ณ เช้าวันที่', parseYmd('2026-11-06')]]); s.getRange('B77').setNumberFormat('yyyy-mm-dd'); return { shop: 'โลตัส', open: null, from: '2026-11-06' }; }
+  return { shop: String(v[0][1]).trim() || 'โลตัส', open: v[1][1] === '' ? null : num(v[1][1]), from: dateKey(v[2][1]) || START_DATE };
+}
+function bankRows() {
+  const s = ss().getSheetByName(SH_BANK); if (!s || s.getLastRow() < 2) return [];
+  return s.getRange(2, 1, s.getLastRow() - 1, 13).getValues().map((r, i) => ({ row: i + 2, id: String(r[0]), d: dateKey(r[1]), kind: String(r[2]), type: String(r[3]), shop: String(r[4] || ''), name: String(r[5] || ''), amt: num(r[6]), detail: String(r[7] || ''), status: String(r[8] || ''), by: String(r[9] || ''), at: String(r[10] || ''), link: String(r[11] || ''), expect: r[12] === '' ? null : num(r[12]) })).filter(x => x.id);
+}
+function bankData() {
+  const c = bankCfg(); const from = c.from;
+  const slips = slipRows(x => x.shop === c.shop && x.d >= from && slipCounted(x) && x.amount > 0);
+  const pays = dailyPayRows().filter(x => x.paidOn >= from);
+  const rows = bankRows(); const outs = rows.filter(x => x.kind === 'ออก' && x.status !== 'ยกเลิก' && x.d >= from);
+  const days = {}; const day = k => days[k] = days[k] || { d: k, in: 0, nIn: 0, pond: 0, out: 0 };
+  slips.forEach(x => { const o = day(x.d); o.in += x.amount; o.nIn++; });
+  pays.forEach(x => { day(x.paidOn).pond += x.amt; });
+  outs.forEach(x => { day(x.d).out += x.amt; });
+  const list = Object.values(days).sort((a, b) => a.d < b.d ? -1 : 1); let bal = c.open || 0; list.forEach(o => { bal += o.in - o.pond - o.out; o.bal = bal; });
+  const tot = { in: list.reduce((a, o) => a + o.in, 0), pond: list.reduce((a, o) => a + o.pond, 0), out: list.reduce((a, o) => a + o.out, 0) };
+  const balance = c.open == null ? null : c.open + tot.in - tot.pond - tot.out;
+  const checks = rows.filter(x => x.kind === 'ยอดจริง' && x.status !== 'ยกเลิก').slice(-5).reverse().map(x => ({ id: x.id, d: x.d, at: x.at, by: x.by, actual: x.amt, expect: x.expect, diff: x.expect == null ? null : x.amt - x.expect, link: x.link }));
+  return { ok: true, shop: c.shop, from, open: c.open, balance, tot, days: list.reverse().slice(0, 40), outs: byDateDesc(rows.filter(x => x.kind === 'ออก')).slice(0, 60).map(x => ({ id: x.id, d: x.d, type: x.type, shop: x.shop, name: x.name, amt: x.amt, detail: x.detail, status: x.status, by: x.by, at: x.at, link: x.link })), checks, types: expenseTypes().filter(t => t !== 'โบนัส').concat(BANK_OTHER) };
+}
+/** manager ลงรายการออก (โทรขออนุญาต owner แล้ว) · ประเภทร้าน → ลงแผ่นรายจ่ายด้วย (จ่ายจาก บัญชีผู้จัดการ) เพื่อให้ P&L / หักเบิกช่าง ถูก */
+function bankOut(a, p) {
+  const day = parseYmd(p.date) || todayBkk(); const type = clean(p.type, 30); const amt = num(p.amount); const detail = clean(p.detail, 150);
+  const shopType = expenseTypes().includes(type) && type !== 'โบนัส';
+  if (!(amt > 0)) return { ok: false, msg: 'ใส่จำนวนเงิน' };
+  if (!shopType && !BANK_OTHER.includes(type)) return { ok: false, msg: 'ประเภทไม่ถูกต้อง' };
+  if (!detail) return { ok: false, msg: 'ใส่รายละเอียด (ใช้ทำอะไร)' };
+  const shop = shopType ? clean(p.shop, 20) : ''; if (shopType && !shops().find(s => s.name === shop)) return { ok: false, msg: 'เลือกร้าน' };
+  const name = type === 'เบิกช่าง' || type === 'ค่าแรงพิเศษ' ? clean(p.name, 30) : ''; if (type === 'เบิกช่าง' && !name) return { ok: false, msg: 'เบิกช่าง ต้องเลือกชื่อช่าง' };
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    let link = ''; if (p.image) { const f = saveImage(p.image, 'บัญชีผู้จัดการ ' + ym(day), ymd(day) + ' ' + type + ' ' + money(amt), false); if (f) link = f.url; }
+    const id = 'B' + seq('B_SEQ'); const s = bankSheet();
+    s.appendRow([id, day, 'ออก', type, shop, name, amt, detail, 'บันทึก', a.name, nowText(), link, '']);
+    if (shopType) { const x = sh(SH_EXP); const row = x.getLastRow() + 1; x.getRange(row, 1, 1, X_LINK).setValues([[day, shop, type, name, amt, detail + ' [#' + id + ']', a.name, link]]); x.getRange(row, X_FROM).setValue(BANK_FROM); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd'); }
+    if (type === 'เบิกช่าง') pushBarber(name, '📝 บันทึกเบิกล่วงหน้า ' + money(amt) + ' บาท (' + ymd(day) + ') จะหักจากค่าแรงสิ้นเดือน');
+    return { ok: true, msg: 'บันทึก #' + id + ' ' + type + ' ' + money(amt) + ' บาท', data: bankData() };
+  } finally { lock.releaseLock(); }
+}
+/** ยกเลิกรายการ (ลงผิด) — สถานะ ยกเลิก + ลบแถวรายจ่ายที่ผูกไว้ (ล้างค่า ไม่ลบแถว เพื่อไม่กระทบสูตร) */
+function bankCancel(a, p) {
+  const id = clean(p.id, 12); const r = bankRows().find(x => x.id === id); if (!r) return { ok: false, msg: 'ไม่พบรายการ' };
+  if (r.status === 'ยกเลิก') return { ok: false, msg: 'ยกเลิกไปแล้ว' };
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const s = bankSheet(); s.getRange(r.row, 9).setValue('ยกเลิก'); s.getRange(r.row, 11).setValue(r.at + ' · ยกเลิกโดย ' + a.name + ' ' + nowText());
+    const x = sh(SH_EXP); const tag = '[#' + id + ']'; const n = x.getLastRow() - 1;
+    if (n > 0) x.getRange(2, X_DETAIL, n, 1).getValues().forEach((v, i) => { if (String(v[0]).indexOf(tag) >= 0) { x.getRange(i + 2, 1, 1, X_LINK).clearContent(); x.getRange(i + 2, X_FROM).clearContent(); } });
+    return { ok: true, msg: 'ยกเลิก #' + id + ' แล้ว', data: bankData() };
+  } finally { lock.releaseLock(); }
+}
+/** กรอกยอดจริงจากแอปธนาคาร → เก็บยอดควรมี ณ ตอนนั้น เพื่อดูส่วนต่าง */
+function bankCheck(a, p) {
+  if (p.amount === '' || p.amount == null || !isFinite(Number(p.amount))) return { ok: false, msg: 'ใส่ยอดในแอปธนาคาร' };
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const exp = bankData().balance; const today = todayBkk();
+    let link = ''; if (p.image) { const f = saveImage(p.image, 'บัญชีผู้จัดการ ' + ym(today), ymd(today) + ' ยอดจริง', false); if (f) link = f.url; }
+    const id = 'B' + seq('B_SEQ'); bankSheet().appendRow([id, today, 'ยอดจริง', '', '', '', num(p.amount), '', 'บันทึก', a.name, nowText(), link, exp == null ? '' : exp]);
+    const d = exp == null ? null : num(p.amount) - exp;
+    return { ok: true, msg: d == null ? 'บันทึกยอดจริงแล้ว (ยังไม่ได้ตั้งยอดยกมา)' : d === 0 ? 'ยอดตรง ✓' : 'ส่วนต่าง ' + (d > 0 ? '+' : '') + money(d) + ' บาท', data: bankData() };
+  } finally { lock.releaseLock(); }
+}
+/** owner ตั้งยอดยกมา (ยอดในบัญชี ณ เช้าวันที่ …) */
+function bankOpen(p) {
+  const d = parseYmd(p.date); if (!d) return { ok: false, msg: 'วันที่ไม่ถูกต้อง' }; if (p.amount === '' || !isFinite(Number(p.amount))) return { ok: false, msg: 'ใส่ยอด' };
+  bankCfg(); const s = sh(SH_SET); s.getRange('B76').setValue(num(p.amount)); s.getRange('B77').setValue(d).setNumberFormat('yyyy-mm-dd');
+  return { ok: true, msg: 'ตั้งยอดยกมา ' + money(p.amount) + ' ณ เช้า ' + p.date, data: bankData() };
 }
