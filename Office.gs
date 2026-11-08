@@ -296,6 +296,7 @@ function bankOut(a, p) {
 }
 /** ยกเลิกรายการ (ลงผิด) — สถานะ ยกเลิก + ลบแถวรายจ่ายที่ผูกไว้ (ล้างค่า ไม่ลบแถว เพื่อไม่กระทบสูตร) */
 function bankCancel(a, p) {
+  if (a.role === 'owner') return { ok: false, msg: 'owner ดูอย่างเดียว — ให้ manager ยกเลิก' };
   const id = clean(p.id, 12); const r = bankRows().find(x => x.id === id); if (!r) return { ok: false, msg: 'ไม่พบรายการ' };
   if (r.status === 'ยกเลิก') return { ok: false, msg: 'ยกเลิกไปแล้ว' };
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
