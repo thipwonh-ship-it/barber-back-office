@@ -241,7 +241,8 @@ function barberSave(p) {
 }
 
 /* ---------- บัญชีผู้จัดการ (manager) — บัญชีที่รับโอนลูกค้าโลตัส ----------
- * ยอดควรมี = ยอดยกมา + สลิปลูกค้าร้านที่ตั้งไว้ (ไม่นับ ซ้ำ/สมุด/ไม่ใช่สลิป) − โอนรายวัน (ปอน) − รายการออกที่ manager ลง
+ * ยอดควรมี = ยอดยกมา + เงินโอนของร้านที่ตั้งไว้ (คอลัมน์ โอน ในยอดรายวัน ที่ manager กรอก) − โอนรายวัน (ปอน) − รายการออกที่ manager ลง
+ * สลิปลูกค้า (แผ่น สลิปโอน ไม่นับ ซ้ำ/สมุด/ไม่ใช่สลิป) ใช้ตรวจ — วันไหนสลิปไม่ตรงกับที่กรอก ขึ้นเตือน
  * รายการออก: manager โทรขออนุญาต owner ก่อน แล้วลงเอง (ไม่มีขั้นอนุมัติในแอป) · owner ดูใน Dashboard
  * ตั้งค่า!B75 ร้าน · B76 ยอดยกมา · B77 ณ เช้าวันที่
  * แผ่น "บัญชีผู้จัดการ": A รหัส B วันที่ C ชนิด(ออก/ยอดจริง) D ประเภท E ร้าน F ช่าง G จำนวน H รายละเอียด I สถานะ J ผู้บันทึก K บันทึกเมื่อ L ลิงก์สลิป M ยอดควรมีตอนกรอก */
@@ -253,7 +254,7 @@ function bankSheet() {
 }
 function bankCfg() {
   const s = sh(SH_SET); const v = s.getRange('A75:B77').getValues();
-  if (!v[0][0]) { s.getRange('A75:B77').setValues([['บัญชีผู้จัดการ: ร้านที่ลูกค้าโอนเข้า', 'โลตัส'], ['บัญชีผู้จัดการ: ยอดยกมา', ''], ['บัญชีผู้จัดการ: ณ เช้าวันที่', parseYmd('2026-11-06')]]); s.getRange('B77').setNumberFormat('yyyy-mm-dd'); return { shop: 'โลตัส', open: null, from: '2026-11-06' }; }
+  if (!v[0][0]) { s.getRange('A75:B77').setValues([['บัญชีผู้จัดการ: ร้านที่ลูกค้าโอนเข้า', 'โลตัส'], ['บัญชีผู้จัดการ: ยอดยกมา', ''], ['บัญชีผู้จัดการ: ณ เช้าวันที่', parseYmd(START_DATE)]]); s.getRange('B77').setNumberFormat('yyyy-mm-dd'); return { shop: 'โลตัส', open: null, from: START_DATE }; }
   return { shop: String(v[0][1]).trim() || 'โลตัส', open: v[1][1] === '' ? null : num(v[1][1]), from: dateKey(v[2][1]) || START_DATE };
 }
 function bankRows() {
@@ -265,12 +266,14 @@ function bankData() {
   const slips = slipRows(x => x.shop === c.shop && x.d >= from && slipCounted(x) && x.amount > 0);
   const pays = dailyPayRows().filter(x => x.paidOn >= from);
   const rows = bankRows(); const outs = rows.filter(x => x.kind === 'ออก' && x.status !== 'ยกเลิก' && x.d >= from);
-  const days = {}; const day = k => days[k] = days[k] || { d: k, in: 0, nIn: 0, pond: 0, out: 0 };
-  slips.forEach(x => { const o = day(x.d); o.in += x.amount; o.nIn++; });
+  const tr = dailyRows(r => r.shop === c.shop && r.d >= from && r.transfer > 0);
+  const days = {}; const day = k => days[k] = days[k] || { d: k, in: 0, slip: 0, nIn: 0, pond: 0, out: 0 };
+  tr.forEach(r => { day(r.d).in += r.transfer; });
+  slips.forEach(x => { const o = day(x.d); o.slip += x.amount; o.nIn++; });
   pays.forEach(x => { day(x.paidOn).pond += x.amt; });
   outs.forEach(x => { day(x.d).out += x.amt; });
-  const list = Object.values(days).sort((a, b) => a.d < b.d ? -1 : 1); let bal = c.open || 0; list.forEach(o => { bal += o.in - o.pond - o.out; o.bal = bal; });
-  const tot = { in: list.reduce((a, o) => a + o.in, 0), pond: list.reduce((a, o) => a + o.pond, 0), out: list.reduce((a, o) => a + o.out, 0) };
+  const list = Object.values(days).sort((a, b) => a.d < b.d ? -1 : 1); let bal = c.open || 0; list.forEach(o => { bal += o.in - o.pond - o.out; o.bal = bal; o.warn = o.nIn > 0 && o.slip !== o.in; });
+  const tot = { warn: list.filter(o => o.warn).length, in: list.reduce((a, o) => a + o.in, 0), pond: list.reduce((a, o) => a + o.pond, 0), out: list.reduce((a, o) => a + o.out, 0) };
   const balance = c.open == null ? null : c.open + tot.in - tot.pond - tot.out;
   const checks = rows.filter(x => x.kind === 'ยอดจริง' && x.status !== 'ยกเลิก').slice(-5).reverse().map(x => ({ id: x.id, d: x.d, at: x.at, by: x.by, actual: x.amt, expect: x.expect, diff: x.expect == null ? null : x.amt - x.expect, link: x.link }));
   return { ok: true, shop: c.shop, from, open: c.open, balance, tot, days: list.reverse().slice(0, 40), outs: byDateDesc(rows.filter(x => x.kind === 'ออก')).slice(0, 60).map(x => ({ id: x.id, d: x.d, type: x.type, shop: x.shop, name: x.name, amt: x.amt, detail: x.detail, status: x.status, by: x.by, at: x.at, link: x.link })), checks, types: expenseTypes().filter(t => t !== 'โบนัส').concat(BANK_OTHER) };
