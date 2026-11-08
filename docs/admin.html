@@ -292,17 +292,17 @@ let BK=null;
 let HM_D=null;
 function homeHtml(k){ const own=ME.role==='owner'; const yd=todayStr(new Date(Date.now()-86400000)); HM_D=HM_D||TODAY;
   const cur=k.days.find(x=>x.d===HM_D);
-  let h='<h2>🏠 ร้านช่างปิ๊ก <span class="mute">นับหัวอย่างเดียว</span></h2>';
-  h+='<div class="tiles" style="grid-template-columns:1fr 1fr"><div class="tile"><small>วันนี้</small><b>'+(()=>{const t=k.days.find(x=>x.d===TODAY);return !t||t.heads==null?'<span class="mute">ยังไม่บันทึก</span>':t.closed?'ไม่ได้เปิด':t.heads+' หัว';})()+'</b></div><div class="tile"><small>เดือนนี้</small><b>'+k.month.heads+' หัว</b><small>มีลูกค้า '+k.month.open+' วัน</small></div></div>';
+  let h='<h2>🏠 ร้านช่างปิ๊ก <span class="mute">ตั้งแต่ 1 พ.ย. 69</span></h2>';
+  h+='<div class="tiles" style="grid-template-columns:1fr 1fr"><div class="tile"><small>วันนี้</small><b>'+(()=>{const t=k.days.find(x=>x.d===TODAY);return !t||t.heads==null?'<span class="mute">ยังไม่บันทึก</span>':t.closed?'ไม่ได้เปิด':t.heads+' หัว'+(t.sales!=null?'<small>'+n(t.sales)+' บาท</small>':'');})()+'</b></div><div class="tile"><small>เดือนนี้</small><b>'+k.month.heads+' หัว</b><small>'+n(k.month.sales)+' บาท · มีลูกค้า '+k.month.open+' วัน</small></div></div>';
   if(!own){ h+='<div class="seg" style="margin-top:10px">'+[[TODAY,'วันนี้'],[yd,'เมื่อวาน']].map(([v,l])=>'<button class="'+(HM_D===v?'on':'')+'" onclick="HM_D=\''+v+'\';homeRe()">'+l+'</button>').join('')+'<button class="chip pick'+(HM_D!==TODAY&&HM_D!==yd?' on':'')+'" style="flex:1;border-radius:9px">📅 '+(HM_D!==TODAY&&HM_D!==yd?HM_D.slice(5):'เลือกวัน')+'<input type="date" max="'+TODAY+'" onchange="if(this.value){HM_D=this.value;homeRe()}"></button></div>';
-    h+='<div class="addb"><input id="hmHeads" inputmode="numeric" placeholder="จำนวนหัว '+HM_D.slice(5)+'" value="'+(cur&&cur.heads!=null&&!cur.closed?cur.heads:'')+'"><button class="btn sec" onclick="homeSave(false,this)">บันทึก</button><button class="btn sec" onclick="homeSave(true,this)">ไม่ได้เปิด</button></div>'; }
+    h+='<div class="row"><div><label>หัว '+HM_D.slice(5)+'</label><input id="hmHeads" inputmode="numeric" placeholder="เช่น 5" value="'+(cur&&cur.heads!=null&&!cur.closed?cur.heads:'')+'"></div><div><label>ยอดเงิน (บาท)</label><input id="hmSales" inputmode="numeric" placeholder="เช่น 1,000" value="'+(cur&&cur.sales!=null&&!cur.closed?cur.sales:'')+'"></div></div><div class="addb"><button class="btn sec" style="flex:1" onclick="homeSave(false,this)">บันทึก</button><button class="btn sec" style="flex:1" onclick="homeSave(true,this)">ไม่ได้เปิด</button></div>'; }
   h+='<div id="hmMsg" class="msg"></div>';
-  h+='<div class="chips" style="margin-top:8px">'+k.days.slice(0,14).map(x=>'<span class="pill'+(x.heads==null?' no':'')+'">'+x.d.slice(5)+' '+(x.heads==null?'—':x.closed?'ปิด':x.heads)+'</span>').join('')+'</div><div class="mute">— = ยังไม่บันทึก · ปิด = ไม่ได้เปิด</div>';
+  h+='<div class="chips" style="margin-top:8px">'+k.days.slice(0,14).map(x=>'<span class="pill'+(x.heads==null?' no':'')+'">'+x.d.slice(5)+' '+(x.heads==null?'—':x.closed?'ปิด':x.heads+' หัว'+(x.sales!=null?' · '+n(x.sales):''))+'</span>').join('')+'</div><div class="mute">— = ยังไม่บันทึก · ปิด = ไม่ได้เปิด</div>';
   return h; }
 let HM=null;
 function homeRe(){ if(HM) $('homeCard').innerHTML=homeHtml(HM); }
 async function homeSave(closed,btn){ const v=$('hmHeads').value; if(!closed&&(v===''||isNaN(Number(v)))){ msg('hmMsg','ใส่จำนวนหัว (0 ได้)','warn'); return; } btn.disabled=true;
-  try{ const r=await api({api:'home_save',date:HM_D,heads:v,closed}); if(r.ok&&r.data){ HM=r.data; homeRe(); } msg('hmMsg',r.msg||'ไม่สำเร็จ',r.ok?'ok':'err'); }catch(e){ msg('hmMsg','บันทึกไม่ได้','err'); } btn.disabled=false; }
+  try{ const r=await api({api:'home_save',date:HM_D,heads:v,sales:String($('hmSales').value).replace(/,/g,''),closed}); if(r.ok&&r.data){ HM=r.data; homeRe(); } msg('hmMsg',r.msg||'ไม่สำเร็จ',r.ok?'ok':'err'); }catch(e){ msg('hmMsg','บันทึกไม่ได้','err'); } btn.disabled=false; }
 function bankType(){ const t=$('boType').value; const shopT=!!t&&!/ส่วนตัว|owner/.test(t); $('boShopW').style.display=shopT?'flex':'none'; $('boNameW').style.display=/เบิก|พิเศษ/.test(t)?'block':'none'; }
 function bankDone(r,id){ if(r.ok&&r.data) renderBank($('bankBox'),r.data); msg(id,r.msg||'ไม่สำเร็จ',r.ok?'ok':'err'); $('pg_today').dataset.loaded=''; }
 async function bankOut(){ const t=$('boType').value, amt=$('boAmt').value; if(!t){ msg('boMsg','เลือกประเภท','warn'); return; } if(!(Number(amt)>0)){ msg('boMsg','ใส่จำนวนเงิน','warn'); return; }
