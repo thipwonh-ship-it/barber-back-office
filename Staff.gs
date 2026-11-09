@@ -302,13 +302,21 @@ function parseShopNote(text) {
   const tot = t.match(/รวม\s*(?:เงิน(?:สด)?)?\s*[:=]?\s*([\d,]+)/);
   const cus = t.match(/(?:ลูกค้า|หัว)\D{0,10}?(\d+)\s*(?:คน|หัว|ราย)/) || t.match(/(?:ลูกค้า|หัว)\s*[:=]?\s*(\d+)/);
   // ลูกค้าแต่ละคน: "คนที่1ลูกค้าใหม่บ้านใกล้" / "คนที่2ลูกค้าประจำ" → ใหม่/ประจำ + ที่มา (ใช้วางแผนโปรโมท)
-  const list = [...t.matchAll(/^\s*คนที่\s*\d+\s*[.:)\-]?\s*(.+)$/gm)].map(m => m[1].trim());
+  const list = [...t.matchAll(/คนที่\s*\d+\s*[.:)\-]?\s*([^\n]*?)(?=\s*คนที่\s*\d|\s*$)/gm)].map(m => m[1].trim()).filter(Boolean); // "คนที่1 ใหม่ google" จะขึ้นบรรทัดใหม่หรือต่อกันก็ได้
   const isNew = x => /ใหม่/.test(x), isReg = x => /ประจำ|เก่า|ขาประจำ/.test(x);
   const src = list.filter(isNew).map(x => x.replace(/ลูกค้า|ใหม่|[-:,()]/g, ' ').replace(/\s+/g, ' ').trim() || 'ไม่ระบุ');
   if (den.length < 2 && !tot && !cus && !list.length) return null;
   const sum = den.length ? den.reduce((a, x) => a + x.v, 0) : null, written = tot ? N(tot[1]) : null;
   const badLines = den.filter(x => x.v % x.d !== 0).map(x => x.d + '=' + x.v);
-  return { sum, written, cash: written != null ? written : sum, customers: cus ? N(cus[1]) : (list.length || null), newC: list.length ? list.filter(isNew).length : null, regC: list.length ? list.filter(isReg).length : null, sources: src, badLines, mismatch: sum != null && written != null && sum !== written };
+  const customers = cus ? N(cus[1]) : (list.length || null);
+  let newC = list.length ? list.filter(isNew).length : null, regC = list.length ? list.filter(isReg).length : null;
+  // ไม่แยกรายคน แต่บอกรวม: "ประจำทั้งหมด" / "ใหม่ทั้งหมด" / "ใหม่ 2 ประจำ 3"
+  if (newC == null && customers != null) {
+    if (/(ประจำ|เก่า)\s*(ทั้งหมด|ทุกคน|หมด)/.test(t)) { newC = 0; regC = customers; }
+    else if (/ใหม่\s*(ทั้งหมด|ทุกคน|หมด)/.test(t)) { newC = customers; regC = 0; }
+    else { const mn = t.match(/ใหม่\s*(\d+)/), mr = t.match(/(?:ประจำ|เก่า)\s*(\d+)/); if (mn || mr) { newC = mn ? N(mn[1]) : 0; regC = mr ? N(mr[1]) : 0; } }
+  }
+  return { sum, written, cash: written != null ? written : sum, customers, newC, regC, sources: src, badLines, mismatch: sum != null && written != null && sum !== written };
 }
 /** webhook: ช่างพิมพ์สรุปร้าน → บันทึก (ส่งใหม่วันเดียวกัน = แทนของเดิม) */
 function noteIntake(uid, text) {
