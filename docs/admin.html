@@ -9,7 +9,10 @@
 .wrap{max-width:560px;margin:0 auto;padding:12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}h2{font-size:15px;margin:0 0 8px;color:var(--ink);letter-spacing:.3px}.mute{color:var(--mute);font-size:12.5px}
 .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.tile{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center}.tile b{display:block;font-size:18px}.tile small{color:var(--mute);font-size:11px}
-.nav{position:fixed;bottom:0;left:0;right:0;background:#000;border-top:1px solid var(--line);display:flex;z-index:5;padding-bottom:env(safe-area-inset-bottom)}.nav button{flex:1;border:0;background:none;padding:8px 2px;font-size:11px;color:var(--mute)}.nav button.on{color:var(--pri);font-weight:700}.nav button span{display:block;font-size:20px}
+.nav{position:fixed;bottom:0;left:0;right:0;background:#000;border-top:1px solid var(--line);display:flex;z-index:5;padding-bottom:env(safe-area-inset-bottom)}.nav button{flex:1;border:0;background:none;padding:8px 2px;font-size:13px;color:var(--mute)}.nav button.on{color:var(--pri);font-weight:700}.nav button span{display:block;font-size:22px}
+.sub{display:flex;gap:6px;margin:0 0 10px;position:sticky;top:50px;z-index:4;background:var(--bg);padding:4px 0}.sub button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--mute);border-radius:20px;padding:8px 4px;font-size:14px;font-weight:600}.sub button.on{background:var(--pri);color:var(--pri-ink);border-color:var(--pri)}
+.alert{border:1px solid #6b5b2a;background:#2a2412;border-radius:12px;padding:10px 12px;margin-bottom:10px}.alert h2{color:#f2c14e}.alert .al{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #3d351c;font-size:14px}.alert .al:last-child{border:0}.alert .al button{margin:0;padding:5px 10px;font-size:13px}.alert.none{border-color:var(--line);background:var(--card)}.alert.none h2{color:var(--ok)}
+.mtd{margin:6px 0}.mtd .srow{grid-template-columns:70px 1fr 90px}.mtd b{font-size:13px}
 table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}td:first-child,th:first-child{text-align:left}th{color:var(--mute);font-weight:600;font-size:12px}tr.sum td{font-weight:700;background:var(--soft)}
 input,select,textarea{width:100%;border:1px solid #3a3a41;border-radius:9px;padding:9px;font-size:15px;background:var(--soft);color:var(--ink)}label{font-size:12px;color:var(--mute);display:block;margin-top:8px}
 .btn{display:inline-block;border:0;border-radius:10px;padding:11px 14px;font-size:15px;font-weight:700;color:var(--pri-ink);background:var(--pri);cursor:pointer;margin-top:8px}.btn.ok{background:var(--ok)}.btn.warn{background:var(--warn)}.btn.err{background:var(--err);color:#fff}.btn.sec{background:transparent;color:var(--pri);border:2px solid var(--pri)}.btn.w{width:100%}.btn:disabled{opacity:.5}
@@ -38,23 +41,24 @@ input,select,textarea{width:100%;border:1px solid #3a3a41;border-radius:9px;padd
 <div class="wrap">
   <div id="loginBox" class="login card hide"><div style="font-size:40px">✂️</div><h2>Barber Back Office</h2><div class="mute">ล็อกอินด้วย LINE ครั้งเดียว เครื่องนี้จะจำไว้ 90 วัน</div><button class="btn w" onclick="lineLogin()">ล็อกอินด้วย LINE</button><div id="loginMsg" class="msg"></div></div>
   <div id="loading" class="card mute">กำลังโหลด…</div>
+  <div id="subbar" class="sub hide"></div>
   <div id="pg_today" class="pg hide"></div>
   <div id="pg_q" class="pg hide"></div>
+  <div id="pg_lv" class="pg hide"></div>
   <div id="pg_daily" class="pg hide"></div>
   <div id="pg_exp" class="pg hide"></div>
   <div id="pg_pond" class="pg hide"></div>
   <div id="pg_month" class="pg hide"></div>
   <div id="pg_pay" class="pg hide"></div>
+  <div id="pg_set" class="pg hide"></div>
   <div id="gmsg" class="msg"></div>
 </div>
+<!-- 4 แท็บหลัก · แท็บย่อยอยู่ใน #subbar -->
 <div class="nav" id="nav">
-  <button data-p="today" onclick="go('today')"><span>📍</span>วันนี้</button>
-  <button data-p="q" onclick="go('q')"><span>📅</span>คิว</button>
-  <button data-p="daily" onclick="go('daily')"><span>✏️</span>กรอกยอด</button>
-  <button data-p="exp" onclick="go('exp')"><span>🧾</span>รายจ่าย</button>
-  <button data-p="pond" onclick="go('pond')"><span>🏦</span>บัญชี</button>
-  <button data-p="month" onclick="go('month')"><span>📊</span>รายเดือน</button>
-  <button data-p="pay" onclick="go('pay')"><span>💰</span>เงินเดือน</button>
+  <button data-g="home" onclick="goG('home')"><span>🏠</span>หน้าแรก</button>
+  <button data-g="q" onclick="goG('q')"><span>📅</span>คิว</button>
+  <button data-g="rec" onclick="goG('rec')"><span>✏️</span>บันทึก</button>
+  <button data-g="rep" onclick="goG('rep')"><span>📊</span>รายงาน</button>
 </div>
 <div class="modal" id="modal"><div class="card" id="modalBody"></div></div>
 <div class="modal" id="dlg" style="align-items:center"><div class="card" style="width:92%;max-width:360px;border-radius:16px;margin:0"><h2 id="dlgT"></h2><div id="dlgM" style="white-space:pre-line;margin-bottom:8px"></div><input id="dlgI" style="display:none" onkeydown="if(event.key==='Enter')dlgEnd(true)"><div class="row" style="margin-top:12px"><button class="btn sec" id="dlgNo" onclick="dlgEnd(false)">ยกเลิก</button><button class="btn sec" id="dlgOk" onclick="dlgEnd(true)">ตกลง</button></div></div></div>
@@ -85,9 +89,15 @@ async function boot(){
   setTimeout(prefetch,800);
 }
 function reload(){ go(PAGE,true); }
-const LOADERS={today:pToday,q:pQueue,daily:pDaily,exp:pExp,pond:pPond,month:pMonth,pay:pPay};
-async function prefetch(){ await Promise.all(['today','q','daily','exp','pond','month','pay'].map(async p=>{ const el=$('pg_'+p); if(el.dataset.loaded||el.dataset.busy) return; el.dataset.busy=1; if(!el.innerHTML) el.innerHTML='<div class="card mute">กำลังโหลด…</div>'; try{ await LOADERS[p](el); el.dataset.loaded=1; }catch(e){} delete el.dataset.busy; })); }
-function go(p,force){ if(!INIT) return; PAGE=p; location.hash=p; document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.p===p)); document.querySelectorAll('.pg').forEach(e=>e.classList.add('hide')); const el=$('pg_'+p); el.classList.remove('hide'); if(el.dataset.busy&&!force){ const t0=Date.now(); const w=setInterval(()=>{ if(el.dataset.loaded||PAGE!==p){ clearInterval(w); } else if(Date.now()-t0>6000){ clearInterval(w); go(p,true); } },500); return; } if(force||!el.dataset.loaded){ el.innerHTML='<div class="card mute">กำลังโหลด…</div>'; LOADERS[p](el).then(()=>el.dataset.loaded=1).catch(e=>{ if(e.message!=='expired') el.innerHTML='<div class="card msg err" style="display:block">โหลดไม่ได้: '+esc(e.message)+'</div>'; }); } }
+const LOADERS={today:pToday,q:pQueue,lv:pQueue,daily:pDaily,exp:pExp,pond:pPond,month:pMonth,pay:pPay,set:pSet};
+/* กลุ่มแท็บ → หน้าย่อย (ชื่อแท็บย่อยใช้คำเดียวกันทุกที่) */
+const GROUPS={home:[['today','หน้าแรก']],q:[['q','📅 ตารางคิว'],['lv','🏖️ ลา / ย้ายร้าน']],rec:[['daily','✏️ กรอกยอด'],['exp','🧾 รายจ่าย'],['pond','💵 เงิน']],rep:[['month','📊 รายเดือน'],['pay','💰 เงินเดือน'],['set','⚙️ ตั้งค่า']]};
+const LAST={}; // หน้าย่อยล่าสุดของแต่ละกลุ่ม
+function groupOf(p){ return Object.keys(GROUPS).find(g=>GROUPS[g].some(x=>x[0]===p))||'home'; }
+function goG(g){ go(LAST[g]||GROUPS[g][0][0]); }
+function subbar(p){ const g=groupOf(p); LAST[g]=p; const sb=$('subbar'); if(GROUPS[g].length<2){ sb.classList.add('hide'); sb.innerHTML=''; return; } sb.classList.remove('hide'); sb.innerHTML=GROUPS[g].map(([k,l])=>'<button class="'+(k===p?'on':'')+'" onclick="go(\''+k+'\')">'+l+'</button>').join(''); document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.g===g)); }
+async function prefetch(){ await Promise.all(['today','q','daily','exp','pond','month','pay','set'].map(async p=>{ const el=$('pg_'+p); if(el.dataset.loaded||el.dataset.busy) return; el.dataset.busy=1; if(!el.innerHTML) el.innerHTML='<div class="card mute">กำลังโหลด…</div>'; try{ await LOADERS[p](el); el.dataset.loaded=1; }catch(e){} delete el.dataset.busy; })); }
+function go(p,force){ if(!INIT) return; if(!LOADERS[p]) p='today'; PAGE=p; location.hash=p; subbar(p); document.querySelectorAll('.pg').forEach(e=>e.classList.add('hide')); const el=$('pg_'+p); el.classList.remove('hide'); if(el.dataset.busy&&!force){ const t0=Date.now(); const w=setInterval(()=>{ if(el.dataset.loaded||PAGE!==p){ clearInterval(w); } else if(Date.now()-t0>6000){ clearInterval(w); go(p,true); } },500); return; } if(force||!el.dataset.loaded){ el.innerHTML='<div class="card mute">กำลังโหลด…</div>'; LOADERS[p](el).then(()=>el.dataset.loaded=1).catch(e=>{ if(e.message!=='expired') el.innerHTML='<div class="card msg err" style="display:block">โหลดไม่ได้: '+esc(e.message)+'</div>'; }); } }
 /* dialog ของแอปเอง (prompt/confirm/alert ใช้ไม่ได้ในแอปที่เพิ่มไว้หน้าจอโฮม iOS) */
 let _dlg=null;
 function ask(o){ return new Promise(res=>{ _dlg=res; const d=$('dlg'); $('dlgT').textContent=o.title||''; $('dlgM').textContent=o.text||''; const inp=$('dlgI'); inp.style.display=o.input?'block':'none'; inp.value=o.def||''; inp.inputMode=o.numeric?'numeric':'text'; $('dlgOk').textContent=o.ok||'ตกลง'; $('dlgNo').style.display=o.noCancel?'none':'inline-block'; d.style.display='flex'; if(o.input) setTimeout(()=>inp.focus(),100); }); }
@@ -101,16 +111,25 @@ const shopSel=(id,cur)=>'<select id="'+id+'">'+INIT.shops.map(s=>'<option'+(s===
 /* ---------- วันนี้ ---------- */
 async function pToday(el,date){ const d=await api({api:'today',date:date||TODAY}); if(!d.ok) throw new Error(d.msg); renderToday(el,d); }
 function renderToday(el,d){
-  if(d.home) HM=d.home;
-  let h='<div class="card"><div class="row"><div><h2>📍 '+d.date+'</h2></div><div><input type="date" value="'+d.date+'" onchange="pToday($(\'pg_today\'),this.value)"></div></div>';
-  h+='<div class="tiles">'+d.byShop.map(s=>'<div class="tile"><small>'+s.shop+'</small><b>'+s.heads+' หัว</b><small>'+n(s.sales)+' บ. · ค่าแรง '+n(s.wage)+'</small></div>').join('')+'</div></div>';
-  const dm=v=>v===null?'<span class="mute">ไม่มี GPS</span>':(v===''||v==null)?'':'<span class="mute">'+v+' ม.</span>'; h+='<div class="card"><h2>เข้างานวันนี้</h2><div class="att"><div class="hd">ช่าง</div><div class="hd">เข้า</div><div class="hd">ออก</div><div class="hd">หมายเหตุ</div>'+d.byShop.map(s=>'<div class="shop">'+s.shop+'</div>'+(s.staff.length?s.staff.map(x=>'<div class="nm">'+x.name+'</div><div>'+(x.tin?'<div><b>'+x.tin+'</b><br>'+dm(x.distIn)+'</div>':'<span class="pill'+(x.status==='ลา'?'':' late')+'">'+(x.status==='ลา'?'🏖️ ลา':x.status==='รออนุมัติลา'?'⏳ ขอลา':esc(x.status||'—'))+'</span>')+'</div><div>'+(x.tout?'<div><b>'+x.tout+'</b><br>'+dm(x.distOut)+'</div>':'<span class="mute">—</span>')+'</div><div>'+(x.late>0?'<span class="pill late">สาย '+x.late+' น.</span>':'')+(x.distIn!==''&&x.distIn!==null&&x.distIn>150?' <span class="pill no">นอกพื้นที่</span>':'')+'</div>').join(''):'<div class="mute" style="grid-column:1/-1;padding:4px 0 8px">— ยังไม่มีใครกดเข้างาน</div>')).join('')+'</div>'+(d.notYet.length?'<div style="margin-top:6px">ยังไม่กด: '+d.notYet.map(x=>'<span class="pill no">'+x+'</span>').join('')+'</div>':'')+'</div>';
-  h+='<div class="card"><h2>💵 เงินสดคงเหลือควรมี</h2><table><tr><th>ร้าน</th><th>ตั้งต้น</th><th>+ขายสด</th><th>−จ่าย</th><th>−เก็บไป</th><th>คงเหลือ</th></tr>'+Object.keys(d.cash).map(k=>{const c=d.cash[k];return '<tr><td>'+k+'</td><td>'+n(c.start)+'</td><td>'+n(c.in)+'</td><td>'+n(c.out)+'</td><td>'+n(c.collected)+'</td><td><b>'+n(c.balance)+'</b></td></tr>';}).join('')+'</table><div class="mute">นับตั้งแต่วันที่ตั้งต้นในแผ่น ตั้งค่า (K28:L30) · ต้องกรอกช่อง "เงินสด" ในกรอกยอดถึงจะคำนวณได้</div></div>';
-  const PB=d.perBarber||[]; h+='<div class="card"><h2>👤 ยอดต่อช่าง '+d.date.slice(5)+'</h2>'+(PB.length?(()=>{const t=PB.reduce((a,r)=>(a.h+=r.heads,a.s+=r.sales,a.w+=r.wage,a),{h:0,s:0,w:0});return '<div class="scroll"><table><tr><th>ช่าง</th><th>ร้าน</th><th>หัว</th><th>ยอด</th><th>ค่าแรง</th></tr>'+PB.map(r=>'<tr><td>'+esc(r.name)+'</td><td>'+esc(r.shop)+'</td><td>'+r.heads+'</td><td>'+n(r.sales)+'</td><td>'+n(r.wage)+'</td></tr>').join('')+'<tr style="font-weight:700"><td>รวม</td><td>'+PB.length+' คน</td><td>'+t.h+'</td><td>'+n(t.s)+'</td><td>'+n(t.w)+'</td></tr></table></div>';})():'<div class="mute">ยังไม่ได้กรอกยอดวันนี้ (กรอกในหน้า ✏️ กรอกยอด)</div>')+'</div>';
+  if(d.home) HM=d.home; const own=ME.role==='owner';
+  let h='<div class="card"><div class="row"><div><h2>🏠 '+d.date+'</h2></div><div><input type="date" value="'+d.date+'" onchange="pToday($(\'pg_today\'),this.value)"></div></div>';
+  h+='<div class="tiles">'+d.byShop.map(s=>'<div class="tile"><small>'+s.shop+'</small><b>'+s.heads+' หัว</b><small>'+n(s.sales)+' บ. · ค่าแรง '+n(s.wage)+'</small></div>').join('')+'</div>';
+  // เดือนนี้ vs เป้า
+  if((d.mtd||[]).length) h+='<div class="mtd">'+d.mtd.map(m=>{const pc=m.target?Math.min(100,Math.round(m.heads*100/m.target)):0;return '<div class="srow"><span>'+esc(m.shop)+'</span><span class="sbar"><i style="width:'+pc+'%'+(m.target&&m.heads>=m.target?';background:#b7e4c0':'')+'"></i></span><b>'+m.heads+(m.target?' / '+m.target+(m.heads>=m.target?' ✓':''):' <span class="mute">ไม่มีเป้า</span>')+'</b></div>';}).join('')+'<div class="mute">หัวเดือนนี้ / เป้า · ยอดเดือนนี้ '+n(d.mtd.reduce((a,m)=>a+m.sales,0))+' บ.</div></div>';
+  h+='</div>';
+  // กล่องเตือน — รวมทุกอย่างที่ต้องทำ/ผิดปกติ ไว้ที่เดียว
+  const A=[]; (d.alerts||[]).forEach(a=>A.push(a));
+  (d.pond||[]).forEach(p=>{ if(p.due) A.push({t:'💸 '+p.name+' ค้างโอน '+p.due+' วัน '+n(p.dueTotal)+' บ.',go:'pond',b:'ไปโอน'}); });
+  if(d.bank&&d.bank.check&&d.bank.check.diff) A.push({t:'🏦 บัญชีผู้จัดการ ส่วนต่าง '+(d.bank.check.diff>0?'+':'')+n(d.bank.check.diff)+' ('+d.bank.check.d.slice(5)+')',go:'pond',b:'ดู'});
+  if(d.date===TODAY&&d.notYet.length&&new Date().getHours()>=12) A.push({t:'⏰ ยังไม่กดเข้างาน: '+d.notYet.join(', ')});
+  h+='<div class="alert'+(A.length?'':' none')+'"><h2>'+(A.length?'⚠️ ต้องดู ('+A.length+')':'✓ ไม่มีอะไรค้าง')+'</h2>'+A.map(a=>'<div class="al"><span>'+a.t+'</span>'+(a.go?'<button class="btn sec" onclick="go(\''+a.go+'\')">'+(a.b||'ดู')+'</button>':'')+'</div>').join('')+'</div>';
+  // เข้างาน
+  const dm=v=>v===null?'<span class="mute">ไม่มี GPS</span>':(v===''||v==null)?'':'<span class="mute">'+v+' ม.</span>';
+  h+='<div class="card"><h2>👥 เข้างาน</h2><div class="att"><div class="hd">ช่าง</div><div class="hd">เข้า</div><div class="hd">ออก</div><div class="hd">หมายเหตุ</div>'+d.byShop.map(s=>'<div class="shop">'+s.shop+'</div>'+(s.staff.length?s.staff.map(x=>'<div class="nm">'+x.name+'</div><div>'+(x.tin?'<div><b>'+x.tin+'</b><br>'+dm(x.distIn)+'</div>':'<span class="pill'+(x.status==='ลา'?'':' late')+'">'+(x.status==='ลา'?'🏖️ ลา':x.status==='รออนุมัติลา'?'⏳ ขอลา':esc(x.status||'—'))+'</span>')+'</div><div>'+(x.tout?'<div><b>'+x.tout+'</b><br>'+dm(x.distOut)+'</div>':'<span class="mute">—</span>')+'</div><div>'+(x.late>0?'<span class="pill late">สาย '+x.late+' น.</span>':'')+(x.distIn!==''&&x.distIn!==null&&x.distIn>150?' <span class="pill no">นอกพื้นที่</span>':'')+'</div>').join(''):'<div class="mute" style="grid-column:1/-1;padding:4px 0 8px">— ยังไม่มีใครกดเข้างาน</div>')).join('')+'</div>';
+  const PB=d.perBarber||[]; if(PB.length){ const t=PB.reduce((a,r)=>(a.h+=r.heads,a.s+=r.sales,a.w+=r.wage,a),{h:0,s:0,w:0}); h+='<details><summary>👤 ยอดต่อช่าง '+d.date.slice(5)+' · '+t.h+' หัว · '+n(t.s)+' บ.</summary><div class="scroll"><table><tr><th>ช่าง</th><th>ร้าน</th><th>หัว</th><th>ยอด</th><th>ค่าแรง</th></tr>'+PB.map(r=>'<tr><td>'+esc(r.name)+'</td><td>'+esc(r.shop)+'</td><td>'+r.heads+'</td><td>'+n(r.sales)+'</td><td>'+n(r.wage)+'</td></tr>').join('')+'<tr class="sum"><td>รวม</td><td>'+PB.length+' คน</td><td>'+t.h+'</td><td>'+n(t.s)+'</td><td>'+n(t.w)+'</td></tr></table></div></details>'; }
+  else h+='<div class="mute" style="margin-top:6px">ยังไม่ได้กรอกยอดวันนี้'+(own?'':' → <a href="#" onclick="go(\'daily\');return false" style="color:var(--ink)">✏️ กรอกยอด</a>')+'</div>';
+  h+='</div>';
   if(d.home) h+='<div class="card" id="homeCard">'+homeHtml(d.home)+'</div>';
-  if(d.bank) { const k=d.bank, c=k.check; h+='<div class="card" onclick="go(\'pond\')" style="cursor:pointer"><h2>🏦 บัญชีผู้จัดการ ยอดควรมี</h2><b style="font-size:20px">'+(k.balance==null?'ยังไม่ได้ตั้งยอดยกมา':n(k.balance)+' บาท')+'</b>'+(k.last?'<div class="mute">ล่าสุด '+k.last.d.slice(5)+': +โอน '+n(k.last.in)+' −ปอน '+n(k.last.pond)+' −อื่นๆ '+n(k.last.out)+'</div>':'')+(c&&c.diff!=null?'<div class="mute">ยอดจริง '+c.d.slice(5)+' '+n(c.actual)+(c.diff===0?' ตรง ✓':' <b style="color:var(--err)">ส่วนต่าง '+(c.diff>0?'+':'')+n(c.diff)+'</b>')+'</div>':'')+'</div>'; }
-  if(d.pond.length) h+='<div class="card"><h2>💸 โอนรายวันค้าง</h2>'+d.pond.map(p=>'<div>'+p.name+': '+(p.due?'<b style="color:var(--err)">'+p.due+' วัน '+n(p.dueTotal)+' บ.</b> <button class="btn" style="padding:4px 10px;font-size:13px;margin:0" onclick="go(\'pond\',true)">ไปโอน</button>':'<span style="color:var(--ok)">ครบแล้ว ✓</span>')+'</div>').join('')+'</div>';
-  if(d.lastCollect.length) h+='<div class="card"><h2>🏦 เก็บเงินสดล่าสุด</h2>'+d.lastCollect.map(c=>'<div>'+c.d+' '+c.shop+' <b>'+n(c.amt)+'</b> '+c.method+' '+(c.who||'')+(c.link?' <a href="'+c.link+'" target="_blank">สลิป</a>':'')+'</div>').join('')+'</div>';
   el.innerHTML=h; }
 
 /* ---------- คิว + ลาหยุด ---------- */
@@ -119,19 +138,16 @@ const shareUrl=t=>'https://line.me/R/share?text='+encodeURIComponent(t);
 const shareBtn=(t,label)=>t?'<a class="btn" style="display:block;text-align:center;text-decoration:none;background:#06c755;color:#fff" href="'+shareUrl(t)+'" target="_blank" rel="noopener">'+(label||'📤 ส่งเข้ากลุ่มไลน์')+'</a><div class="mute" style="margin-top:6px">เลือกกลุ่มรวมร้าน → ส่ง · ระบบจะตอบยืนยันในกลุ่มทันที</div>':'';
 const tm=t=>{const m=/(\d+):(\d+)/.exec(t||'');return m?+m[1]*60+ +m[2]:0;}, fm=x=>('0'+Math.floor(x/60)).slice(-2)+':'+('0'+x%60).slice(-2);
 const addD=(s,k)=>{const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+k);return todayStr(d);};
-async function pQueue(el){ QS.shop=QS.shop||INIT.shops[0]; const d=await api({api:'q_day',date:QS.date,shop:QS.shop}); if(!d.ok) throw new Error(d.msg); QS.d=d; renderQueue(el,d); }
-function qReload(){ go('q',true); }
+async function pQueue(el){ QS.shop=QS.shop||INIT.shops[0]; const d=await api({api:'q_day',date:QS.date,shop:QS.shop}); if(!d.ok) throw new Error(d.msg); QS.d=d; renderQueue($('pg_q'),d); renderLeave($('pg_lv'),d); $('pg_q').dataset.loaded=$('pg_lv').dataset.loaded=1; }
+function qReload(){ go(PAGE==='lv'?'lv':'q',true); }
+function dayChips(){ const chip=(lb,v)=>'<button class="chip'+(QS.date===v?' on':'')+'" onclick="QS.date=\''+v+'\';qReload()">'+lb+'</button>'; const other=QS.date!==TODAY&&QS.date!==addD(TODAY,1); return '<div class="chips">'+chip('วันนี้',TODAY)+chip('พรุ่งนี้',addD(TODAY,1))+'<span class="chip pick'+(other?' on':'')+'">📅 '+(other?esc(QS.d.label):'เลือกวัน')+'<input type="date" value="'+QS.date+'" onchange="if(this.value){QS.date=this.value;qReload()}"></span></div>'; }
 function renderQueue(el,d){
-  const chip=(lb,v)=>'<button class="chip'+(QS.date===v?' on':'')+'" onclick="QS.date=\''+v+'\';qReload()">'+lb+'</button>';
-  const other=QS.date!==TODAY&&QS.date!==addD(TODAY,1);
-  let h='<div class="card"><div class="chips">'+chip('วันนี้',TODAY)+chip('พรุ่งนี้',addD(TODAY,1))+'<span class="chip pick'+(other?' on':'')+'">📅 '+(other?esc(d.label):'เลือกวัน')+'<input type="date" value="'+d.date+'" onchange="if(this.value){QS.date=this.value;qReload()}"></span></div>';
+  let h='<div class="card">'+dayChips();
   h+='<div class="seg">'+INIT.shops.map(s=>'<button class="'+(s===d.shop?'on':'')+'" onclick="QS.shop=\''+s+'\';qReload()">'+s+'</button>').join('')+'</div>';
-  h+='<div class="row"><button class="btn sec" onclick="qForm({})">+ จองคิว</button>'+(d.canLeave?'<button class="btn sec" onclick="lvForm()">🏖️ ลงลาให้ช่าง</button>':'')+'</div>'+(d.canLeave?'<button class="btn sec" style="width:100%" onclick="mvForm()">🔁 ย้ายร้าน (สลับช่าง/ฉุกเฉิน)</button>':'');
+  h+='<button class="btn sec w" onclick="qForm({})">+ จองคิว</button>';
   if(d.unsent) h+='<div class="msg warn" style="display:block">📤 มี '+d.unsent+' คิวที่ยังไม่ได้ส่งเข้ากลุ่ม (ป้าย 📤 ในตาราง) — แตะคิวแล้วกดส่ง</div>';
+  const wait=(d.leaves||[]).filter(x=>!x.approved); if(wait.length) h+='<div class="msg warn" style="display:block">⏳ คำขอลารออนุมัติ '+wait.length+' รายการ → <a href="#" onclick="go(\'lv\');return false" style="color:inherit">🏖️ ลา / ย้ายร้าน</a></div>';
   h+='</div>';
-  // ลารออนุมัติ / ลาที่จะถึง
-  const wait=(d.leaves||[]).filter(x=>!x.approved), ok=(d.leaves||[]).filter(x=>x.approved);
-  if(wait.length) h+='<div class="card" style="border-color:#6b5b2a"><h2>⏳ คำขอลารออนุมัติ ('+wait.length+')</h2>'+wait.map(x=>'<div class="dl"><div><b>'+esc(x.name)+'</b> · '+esc(x.reason)+' · '+esc(x.label)+(x.days.length>1?' ('+x.days.length+' วัน)':'')+'</div><div class="mute">'+esc((x.note.split('·')[3]||'').replace(/แจ้งล่วงหน้า.*/,'').trim())+'</div>'+(x.notice!=null&&x.notice<7&&x.reason!=='ลาป่วย'?'<div class="pill late">⚠️ แจ้งล่วงหน้า '+x.notice+' วัน (ต้อง 7 วัน)</div>':'')+(x.cover?'<div class="msg err" style="display:block;white-space:pre-line">⚠️ '+esc(x.cover)+'</div>':'')+(d.canLeave?'<div class="row"><button class="btn sec" onclick="lvApprove(\''+x.id+'\',true)">✅ อนุมัติ</button><button class="btn sec" onclick="lvApprove(\''+x.id+'\',false)">❌ ไม่อนุมัติ</button></div>':'<div class="mute">รอปิ๊กอนุมัติ</div>')+'</div>').join('')+'</div>';
   // ตาราง
   const o=tm(d.open), c=tm(d.close), R=(c-o)/10, B=d.barbers;
   h+='<div class="card"><h2>📅 '+esc(d.label)+' · '+esc(d.shop)+' <span class="mute">('+d.open+'–'+d.close+' · คิวละ '+d.dur+' นาที)</span></h2>';
@@ -147,8 +163,15 @@ function renderQueue(el,d){
   }
   if((d.elsewhere||[]).length) h+='<div class="mute" style="margin-top:8px">ร้านอื่นวันนี้: '+d.elsewhere.map(x=>esc(x.name)+' ('+(x.off?'🏖️ '+esc(x.off):esc(x.at))+')').join(' · ')+'</div>';
   h+='</div>';
-  if((d.moves||[]).length) h+='<div class="card"><h2>🔁 ย้ายร้านที่จัดไว้</h2>'+d.moves.map(x=>'<div class="dl" style="display:flex;justify-content:space-between;align-items:center"><div><b>'+esc(x.name)+'</b> → '+esc(x.shop)+' · '+esc(x.label)+(x.from?' <span class="mute">(จาก '+esc(x.from)+')</span>':'')+'</div>'+(d.canLeave?'<button class="btn sec" style="margin:0;padding:5px 10px;font-size:13px" onclick="mvCancel(\''+x.id+'\')">ยกเลิก</button>':'')+'</div>').join('')+'</div>';
-  if(ok.length) h+='<div class="card"><h2>🏖️ ลาที่อนุมัติแล้ว</h2>'+ok.map(x=>'<div class="dl" style="display:flex;justify-content:space-between;align-items:center"><div><b>'+esc(x.name)+'</b> · '+esc(x.reason)+' · '+esc(x.label)+'</div>'+(d.canLeave?'<button class="btn sec" style="margin:0;padding:5px 10px;font-size:13px" onclick="lvCancel(\''+x.id+'\')">ยกเลิกลา</button>':'')+'</div>').join('')+'</div>';
+  el.innerHTML=h;
+}
+/* หน้า 🏖️ ลา / ย้ายร้าน — ปิ๊กอนุมัติ · owner ดู */
+function renderLeave(el,d){
+  const wait=(d.leaves||[]).filter(x=>!x.approved), ok=(d.leaves||[]).filter(x=>x.approved);
+  let h='<div class="card">'+dayChips()+(d.canLeave?'<div class="row"><button class="btn sec" onclick="lvForm()">🏖️ ลงลาให้ช่าง</button><button class="btn sec" onclick="mvForm()">🔁 ย้ายร้าน</button></div><div class="mute" style="margin-top:4px">ลงลาเอง = อนุมัติทันที · ย้ายร้าน = สลับช่างข้ามร้านวันนั้น (ฉุกเฉิน)</div>':'<div class="mute">ลาหยุด/ย้ายร้าน ผู้จัดการเป็นคนลงและอนุมัติ · owner ดูอย่างเดียว</div>')+'</div>';
+  h+='<div class="card'+(wait.length?'" style="border-color:#6b5b2a':'')+'"><h2>⏳ คำขอลารออนุมัติ ('+wait.length+')</h2>'+(wait.length?wait.map(x=>'<div class="dl"><div><b>'+esc(x.name)+'</b> · '+esc(x.reason)+' · '+esc(x.label)+(x.days.length>1?' ('+x.days.length+' วัน)':'')+'</div><div class="mute">'+esc((x.note.split('·')[3]||'').replace(/แจ้งล่วงหน้า.*/,'').trim())+'</div>'+(x.notice!=null&&x.notice<7&&x.reason!=='ลาป่วย'?'<div class="pill late">⚠️ แจ้งล่วงหน้า '+x.notice+' วัน (ต้อง 7 วัน)</div>':'')+(x.cover?'<div class="msg err" style="display:block;white-space:pre-line">⚠️ '+esc(x.cover)+'</div>':'')+(d.canLeave?'<div class="row"><button class="btn sec" onclick="lvApprove(\''+x.id+'\',true)">✅ อนุมัติ</button><button class="btn sec" onclick="lvApprove(\''+x.id+'\',false)">❌ ไม่อนุมัติ</button></div>':'<div class="mute">รอผู้จัดการอนุมัติ</div>')+'</div>').join(''):'<div class="mute">ไม่มี</div>')+'</div>';
+  h+='<div class="card"><h2>🏖️ ลาที่อนุมัติแล้ว (ที่จะถึง)</h2>'+(ok.length?ok.map(x=>'<div class="dl" style="display:flex;justify-content:space-between;align-items:center"><div><b>'+esc(x.name)+'</b> · '+esc(x.reason)+' · '+esc(x.label)+'</div>'+(d.canLeave?'<button class="btn sec" style="margin:0;padding:5px 10px;font-size:13px" onclick="lvCancel(\''+x.id+'\')">ยกเลิกลา</button>':'')+'</div>').join(''):'<div class="mute">ไม่มี</div>')+'</div>';
+  h+='<div class="card"><h2>🔁 ย้ายร้านที่จัดไว้</h2>'+((d.moves||[]).length?d.moves.map(x=>'<div class="dl" style="display:flex;justify-content:space-between;align-items:center"><div><b>'+esc(x.name)+'</b> → '+esc(x.shop)+' · '+esc(x.label)+(x.from?' <span class="mute">(จาก '+esc(x.from)+')</span>':'')+'</div>'+(d.canLeave?'<button class="btn sec" style="margin:0;padding:5px 10px;font-size:13px" onclick="mvCancel(\''+x.id+'\')">ยกเลิก</button>':'')+'</div>').join(''):'<div class="mute">ไม่มี</div>')+'</div>';
   el.innerHTML=h;
 }
 function qFind(id){ for(const b of QS.d.barbers) for(const x of b.q) if(x.id===id) return x; return null; }
@@ -222,7 +245,7 @@ function renderDaily(el,d){
   if((d.others||[]).length) h+='<div class="addb"><select id="dlAdd"><option value="">+ เพิ่มช่างที่ไม่ได้ลงเวลา…</option>'+d.others.map(x=>'<option>'+esc(x)+'</option>').join('')+'</select><button class="btn sec" onclick="addDlRow()">เพิ่ม</button></div>';
   h+='<div class="mute" style="margin:6px 0">กรอก หัว · เงินสด · โอน → "รวม" และค่าแรงคำนวณให้เอง (50% ของรวม หรือ 200/หัว Kraft ไม่ต่ำกว่าขั้นต่ำ) · ช่อง "แก้ค่าแรง" ใช้เมื่อจะจ่ายต่างจากสูตร · ลบ: ล้างทุกช่องให้ว่างแล้วบันทึก</div>';
   h+='<button class="btn ok w" id="dlSave" onclick="saveDaily()">บันทึก '+d.shop+' '+d.date+'</button><div id="dlMsg" class="msg"></div></div>';
-  if(d.cash){ const c=d.cash; h+='<div class="card"><h2>💵 เงินสดร้าน'+d.shop+' ควรมีตอนนี้</h2><div style="font-size:26px;font-weight:700">'+n(c.balance)+' บาท</div><div class="mute" style="margin-top:4px">ตั้งต้น '+n(c.start)+(c.from?' ('+c.from.slice(5)+')':'')+' + ขายเงินสด '+n(c.in)+' − ช่างหยิบ/จ่ายจากเงินสด '+n(c.out)+' − เก็บไปแล้ว '+n(c.collected)+'</div><div class="mute" style="margin-top:4px">นับเงินในลิ้นชักให้ตรงตัวเลขนี้ ถ้าไม่ตรง = มีคนหยิบเงินแล้วไม่ได้บันทึก หรือกรอกเงินสด/โอนผิด</div></div>'; }
+  // เงินสดคงเหลือ → ดูที่ บันทึก › 💵 เงิน (ไม่แสดงซ้ำ)
   el.innerHTML=h; DL.data=d; document.querySelectorAll('#dlTable [data-name]').forEach(slipCheck); noteHeads(); }
 function dlRow(r){ return '<div class="dl" data-name="'+esc(r.name)+'"><div class="dlh"><b>'+esc(r.name)+'</b>'+(r.punched?' <span class="pill">เข้างาน</span>':'')+'</div>'
     +'<div class="dlg"><label>หัว<input inputmode="numeric" class="h" value="'+r.heads+'" oninput="calcRow(this)"></label><label>เงินสด<input inputmode="numeric" class="c" value="'+r.cash+'" oninput="calcRow(this)"></label><label>โอน<input inputmode="numeric" class="t" value="'+r.transfer+'" oninput="calcRow(this)"></label><label>รวม<input class="s tot" value="'+(r.sales||'')+'" readonly tabindex="-1"></label></div>'
@@ -265,14 +288,23 @@ async function addExp(){ $('xBtn').disabled=true; msg('xMsg','กำลังบ
   const r=await api({api:'expense_add',date:$('xDate').value,shop:$('xShop').value,type:$('xType').value,name:$('xName').value,amount:$('xAmt').value,detail:$('xDetail').value,from,image}); $('xBtn').disabled=false; msg('xMsg',r.msg,r.ok?'ok':'err'); if(r.ok){ $('xAmt').value='';$('xDetail').value='';$('xImg').value=''; setTimeout(()=>go('exp',true),800); $('pg_today').dataset.loaded=''; } }catch(e){ $('xBtn').disabled=false; msg('xMsg','บันทึกไม่ได้','err'); } }
 
 /* ---------- โอนรายวัน (ปอน) ---------- */
-async function pPond(el){ const [b,d]=await Promise.all([api({api:'bank'}),api({api:'pond'})]); if(!d.ok) throw new Error(d.msg); if(!b.ok) throw new Error(b.msg); el.innerHTML='<div id="bankBox"></div><div id="pondBox"></div>'; renderBank($('bankBox'),b); renderPond($('pondBox'),d); }
+/* หน้า 💵 เงิน = เงินสดร้าน · โอนรายวัน (ปอน) · บัญชีผู้จัดการ — ที่เดียว */
+async function pPond(el){ const [c,d,b]=await Promise.all([api({api:'cash_list',ym:TODAY.slice(0,7)}),api({api:'pond'}),api({api:'bank'})]); if(!d.ok) throw new Error(d.msg); if(!b.ok) throw new Error(b.msg); el.innerHTML='<div id="cashBox"></div><div id="pondBox"></div><div id="bankBox"></div>'; if(c.ok) renderCash($('cashBox'),c); renderPond($('pondBox'),d); renderBank($('bankBox'),b); }
+function renderCash(el,c){ const K=Object.keys(c.balance||{}); let h='<div class="card"><h2>💵 เงินสดในร้าน ควรมี</h2><table><tr><th>ร้าน</th><th>ตั้งต้น</th><th>+ขายสด</th><th>−จ่าย</th><th>−เก็บไป</th><th>คงเหลือ</th></tr>'+K.map(k=>{const x=c.balance[k];return '<tr><td>'+k+'<br><small class="mute">'+(x.from?'ตั้งแต่ '+x.from.slice(5):'')+'</small></td><td>'+n(x.start)+'</td><td>'+n(x.in)+'</td><td>'+n(x.out)+'</td><td>'+n(x.collected)+'</td><td><b>'+n(x.balance)+'</b></td></tr>';}).join('')+'</table>';
+  h+='<div class="mute" style="margin-top:6px">นับเงินในลิ้นชักให้ตรง · ถ้าไม่ตรง = มีคนหยิบเงินแล้วไม่บันทึก หรือกรอกสด/โอนผิด</div>';
+  h+='<button class="btn sec" style="width:100%" onclick="cashReset()">🔄 นับเงินจริง → ตั้งต้นใหม่</button><div id="cashMsg" class="msg"></div>';
+  const R=(c.rows||[]).slice(0,6); h+=R.length?'<details><summary>🏦 เก็บเงินสดล่าสุด ('+R.length+')</summary>'+R.map(x=>'<div class="dl" style="padding:6px 0">'+x.d.slice(5)+' '+esc(x.shop)+' <b>'+n(x.amt)+'</b> '+esc(x.method)+' '+esc(x.who||'')+(x.link?' <a href="'+x.link+'" target="_blank">สลิป</a>':'')+'</div>').join('')+'</details>':'<div class="mute" style="margin-top:6px">เดือนนี้ยังไม่มีการเก็บเงินสด</div>';
+  el.innerHTML=h+'</div>'; }
+function cashReset(){ modal('<h2>🔄 ตั้งต้นเงินสดใหม่</h2><div class="mute">นับเงินจริงในลิ้นชักตอนปิดร้าน แล้วใส่ตัวเลข — ระบบจะใช้เป็นจุดเริ่มนับใหม่ตั้งแต่วันถัดไป (ยอดเดิมไม่หาย)</div><label>ร้าน</label><div class="seg" id="crShop">'+INIT.shops.map((s,i)=>'<button data-v="'+s+'" onclick="segPick(this)">'+s+'</button>').join('')+'</div><div class="row"><div><label>นับ ณ สิ้นวัน</label><input type="date" id="crDate" value="'+TODAY+'" max="'+TODAY+'"></div><div><label>เงินสดนับได้ (บาท)</label><input id="crAmt" inputmode="numeric"></div></div><button class="btn w" onclick="cashResetSave()">บันทึก</button><div id="crMsg" class="msg"></div>'); }
+async function cashResetSave(){ const b=document.querySelector('#crShop .on'); const amt=String($('crAmt').value).replace(/,/g,''); if(!b){ msg('crMsg','เลือกร้าน','warn'); return; } if(!/^\d+$/.test(amt)){ msg('crMsg','ใส่ตัวเลข','warn'); return; }
+  msg('crMsg','กำลังบันทึก…','warn'); const r=await api({api:'cash_reset',shop:b.dataset.v,amount:amt,date:$('crDate').value}); msg('crMsg',r.msg||'ไม่สำเร็จ',r.ok?'ok':'err'); if(r.ok){ $('pg_today').dataset.loaded=''; setTimeout(()=>{closeModal();go('pond',true);},900); } }
 /* ---------- บัญชีผู้จัดการ ---------- */
 const sg=v=>(v>0?'+':'')+n(v);
 function renderBank(el,b){ const own=ME.role==='owner'; BK=b;
   let h='<div class="card"><h2>🏦 บัญชีผู้จัดการ <span class="mute">รับโอนลูกค้า'+esc(b.shop)+'</span></h2>';
   if(b.open==null) h+='<div class="msg warn" style="display:block">ยังไม่ได้ตั้งยอดยกมา'+(own?'':' — ให้ owner ตั้ง')+'</div>';
   h+='<div class="tiles"><div class="tile"><small>ยอดควรมีตอนนี้</small><b>'+(b.balance==null?'-':n(b.balance))+'</b></div><div class="tile"><small>+ เงินโอน'+esc(b.shop)+'</small><b>'+n(b.tot.in)+'</b><small>ไม่นับเงินสด</small></div><div class="tile"><small>− โอนปอน / อื่นๆ</small><b>'+n(b.tot.pond+b.tot.out)+'</b><small>'+n(b.tot.pond)+' / '+n(b.tot.out)+'</small></div></div>';
-  h+='<div class="mute" style="margin-top:6px">ยอดยกมา '+(b.open==null?'-':n(b.open))+' ณ เช้า '+b.from+(own?' · <a href="#" onclick="bankOpen();return false">'+(b.open==null?'ตั้งยอดยกมา':'แก้')+'</a>':'')+'</div>';
+  h+='<div class="mute" style="margin-top:6px">ยอดยกมา '+(b.open==null?'-':n(b.open))+' ณ เช้า '+b.from+(own?' · <span class="mute">แก้ที่ รายงาน › ตั้งค่า</span>':'')+'</div>';
   const c=b.checks[0]; if(c) h+='<div class="tile" style="text-align:left;margin-top:8px"><small>ยอดจริงล่าสุด '+c.d.slice(5)+' '+esc(c.at.split(' ')[0]||'')+' โดย '+esc(c.by)+(c.link?' <a href="'+c.link+'" target="_blank">📎</a>':'')+'</small><b>'+n(c.actual)+' บ.'+(c.diff==null?'':c.diff===0?' <span style="color:var(--ok)">ตรง ✓</span>':' <span style="color:var(--err)">ส่วนต่าง '+sg(c.diff)+'</span>')+'</b><small>ตอนนั้นระบบคำนวณได้ '+(c.expect==null?'-':n(c.expect))+'</small></div>';
   if(!own) h+='<label>ยอดจริงในแอปธนาคารตอนนี้ (ไม่บังคับ)</label><div class="addb"><input id="bkAct" inputmode="numeric" placeholder="เช่น 12,350"><input type="file" id="bkActImg" accept="image/*" style="flex:0 0 96px;font-size:11px"><button class="btn sec" id="bkActBtn" onclick="bankCheck()">ตรวจ</button></div>';
   if(b.tot.warn) h+='<div class="msg err" style="display:block">⚠️ สลิปไม่ตรงกับยอดโอนที่กรอก '+b.tot.warn+' วัน — ดูตารางรายวัน</div>';
@@ -304,7 +336,7 @@ function homeRe(){ if(HM) $('homeCard').innerHTML=homeHtml(HM); }
 async function homeSave(closed,btn){ const v=$('hmHeads').value; if(!closed&&(v===''||isNaN(Number(v)))){ msg('hmMsg','ใส่จำนวนหัว (0 ได้)','warn'); return; } btn.disabled=true;
   try{ const r=await api({api:'home_save',date:HM_D,heads:v,sales:String($('hmSales').value).replace(/,/g,''),closed}); if(r.ok&&r.data){ HM=r.data; homeRe(); } msg('hmMsg',r.msg||'ไม่สำเร็จ',r.ok?'ok':'err'); }catch(e){ msg('hmMsg','บันทึกไม่ได้','err'); } btn.disabled=false; }
 function bankType(){ const t=$('boType').value; const shopT=!!t&&!/ส่วนตัว|owner/.test(t); $('boShopW').style.display=shopT?'flex':'none'; $('boNameW').style.display=/เบิก|พิเศษ/.test(t)?'block':'none'; }
-function bankDone(r,id){ if(r.ok&&r.data) renderBank($('bankBox'),r.data); msg(id,r.msg||'ไม่สำเร็จ',r.ok?'ok':'err'); $('pg_today').dataset.loaded=''; }
+function bankDone(r,id){ if(r.ok&&r.data){ if($('bankBox')) renderBank($('bankBox'),r.data); else { $('pg_pond').dataset.loaded=''; go('set',true); } } msg(id,r.msg||'ไม่สำเร็จ',r.ok?'ok':'err'); $('pg_today').dataset.loaded=''; }
 async function bankOut(){ const t=$('boType').value, amt=$('boAmt').value; if(!t){ msg('boMsg','เลือกประเภท','warn'); return; } if(!(Number(amt)>0)){ msg('boMsg','ใส่จำนวนเงิน','warn'); return; }
   if(!(await confirmA('ลงรายการออก '+t+' '+n(amt)+' บาท\nโทรขออนุญาต owner แล้วใช่ไหม?','ยืนยัน'))) return;
   $('boBtn').disabled=true; msg('boMsg','กำลังบันทึก…','warn'); try{ let image=''; const f=$('boImg').files[0]; if(f) image=await shrink(f);
@@ -333,7 +365,7 @@ let M_YM=TODAY.slice(0,7);
 async function pMonth(el){ const d=await api({api:'month',ym:M_YM}); if(!d.ok) throw new Error(d.msg);
   let h='<div class="card"><div class="row"><h2>📊 รายเดือน</h2>'+monthSel('mYm',M_YM,'M_YM=this.value;go(\'month\',true)')+'</div>';
   h+='<div class="tiles"><div class="tile"><small>ยอดขาย</small><b>'+n(d.total.sales)+'</b></div><div class="tile"><small>ค่าแรง+รายจ่าย</small><b>'+n(d.total.wage+d.total.exp)+'</b></div><div class="tile"><small>กำไร</small><b style="color:'+(d.total.profit>=0?'var(--ok)':'var(--err)')+'">'+n(d.total.profit)+'</b></div></div></div>';
-  h+='<div class="card"><h2>ต่อร้าน</h2><div class="scroll"><table><tr><th>ร้าน</th><th>หัว/เป้า</th><th>ยอดขาย</th><th>ค่าแรง</th><th>รายจ่าย</th><th>กำไร</th></tr>'+d.byShop.map(s=>'<tr><td>'+s.shop+(ME.role==='owner'?' <a href="#" onclick="setTarget(\''+s.shop+'\','+(s.target||0)+');return false" style="font-size:11px">'+(s.target?'แก้เป้า':'ตั้งเป้า')+'</a>':'')+'</td><td>'+s.heads+' / '+(s.target?'<b>'+s.target+'</b>'+(s.heads>=s.target?' ✓':''):'<span class="mute">ยังไม่ตั้ง</span>')+'</td><td>'+n(s.sales)+'</td><td>'+n(s.wage)+'</td><td>'+n(s.expTotal)+'</td><td><b>'+n(s.profit)+'</b></td></tr>').join('')+'</table></div>';
+  h+='<div class="card"><h2>ต่อร้าน</h2><div class="scroll"><table><tr><th>ร้าน</th><th>หัว/เป้า</th><th>ยอดขาย</th><th>ค่าแรง</th><th>รายจ่าย</th><th>กำไร</th></tr>'+d.byShop.map(s=>'<tr><td>'+s.shop+'</td><td>'+s.heads+' / '+(s.target?'<b>'+s.target+'</b>'+(s.heads>=s.target?' ✓':''):'<span class="mute">ยังไม่ตั้ง</span>')+'</td><td>'+n(s.sales)+'</td><td>'+n(s.wage)+'</td><td>'+n(s.expTotal)+'</td><td><b>'+n(s.profit)+'</b></td></tr>').join('')+'</table></div>';
   h+='<div class="mute" style="margin-top:6px">รายจ่าย: '+d.byShop.map(s=>s.shop+' → '+Object.keys(s.expenses).map(k=>k+' '+n(s.expenses[k])).join(', ')).join(' | ')+'</div></div>';
   (d.customers||[]).forEach(c=>{ const mx=Math.max(1,...c.sources.map(s=>s.n)), pn=c.newC+c.regC?Math.round(c.newC*100/(c.newC+c.regC)):0;
     h+='<div class="card"><h2>👥 ลูกค้า '+esc(c.shop)+' · '+M_YM+'</h2><div class="tiles"><div class="tile"><small>ลูกค้าทั้งหมด</small><b>'+c.total+'</b></div><div class="tile"><small>ลูกค้าใหม่</small><b>'+c.newC+'</b></div><div class="tile"><small>ลูกค้าประจำ</small><b>'+c.regC+'</b></div></div>'
@@ -354,11 +386,21 @@ function renderMD(){ const c=$('mdCard'); if(!c) return; const names=[...new Set
    +rows.map(r=>'<tr><td>'+r.d.slice(5)+'</td>'+(MD_NAME?'':'<td>'+esc(r.name)+'</td>')+'<td>'+esc(r.shop)+'</td><td>'+r.heads+'</td><td>'+n(r.sales)+'</td><td>'+n(r.wage)+'</td>'+(anyDaily?'<td>'+(r.daily?(r.paidOn?'<span style="color:var(--ok)">✓ '+r.paidOn.slice(5)+'</span>':'<span class="mute">ยัง</span>'):'')+'</td>':'')+'</tr>').join('')
    +'<tr style="font-weight:700"><td>รวม</td>'+(MD_NAME?'':'<td>'+rows.length+' วัน</td>')+'<td>'+(MD_NAME?rows.length+' วัน':'')+'</td><td>'+t.h+'</td><td>'+n(t.s)+'</td><td>'+n(t.w)+'</td>'+(anyDaily?'<td></td>':'')+'</tr></table></div>';
   c.innerHTML=h; }
-async function setTarget(shop,cur){
+async function setTarget(shop,cur){ M_YM=PAGE==='set'?SET_YM:M_YM;
   if(cur&&!(await confirmA('เป้า '+shop+' เดือน '+M_YM+' ตั้งไว้แล้ว '+cur+' หัว\nต้องการเปลี่ยนใช่ไหม?','เป้าตั้งไว้แล้ว'))) return;
   const v=await promptA((cur?'แก้เป้าหัว ':'ตั้งเป้าหัว ')+shop+' เดือน '+M_YM,cur||'',true); if(v==null||v==='') return;
   if(!/^\d+$/.test(String(v).trim())){ await alertA('ใส่ตัวเลขจำนวนหัว'); return; }
-  const r=await api({api:'target_set',ym:M_YM,shop,val:v.trim()}); msg('gmsg',r.msg,r.ok?'ok':'err'); if(r.ok){ $('pg_today').dataset.loaded=''; $('pg_pay').dataset.loaded=''; go('month',true); } }
+  const r=await api({api:'target_set',ym:M_YM,shop,val:v.trim()}); msg('gmsg',r.msg,r.ok?'ok':'err'); if(r.ok){ ['pg_today','pg_pay','pg_month'].forEach(k=>$(k).dataset.loaded=''); SET_YM=M_YM; go('set',true); } }
+
+/* ---------- ⚙️ ตั้งค่า (owner) — เป้าหัว · ช่าง · ยอดยกมาบัญชี ---------- */
+let SET_YM=TODAY.slice(0,7);
+async function pSet(el){ const own=ME.role==='owner'; const [m,b]=await Promise.all([api({api:'month',ym:SET_YM}),api({api:'bank'})]); if(!m.ok) throw new Error(m.msg);
+  let h='<div class="card"><div class="row"><h2>🎯 เป้าหัวต่อร้าน</h2>'+monthSel('sYm',SET_YM,'SET_YM=this.value;go(\'set\',true)')+'</div><div class="mute" style="margin-bottom:6px">ตั้งต้นเดือน · ร้านที่ตัดครบเป้า ช่างทุกคนในร้านได้โบนัส 1,000 (M นับแยกตามร้านที่ตัดจริง)</div>';
+  h+='<table><tr><th>ร้าน</th><th>หัวตอนนี้</th><th>เป้า</th><th></th></tr>'+m.byShop.map(s=>'<tr><td>'+esc(s.shop)+'</td><td>'+s.heads+'</td><td>'+(s.target?'<b>'+s.target+'</b>'+(s.heads>=s.target?' ✓':''):'<span class="mute">ยังไม่ตั้ง</span>')+'</td><td>'+(own?'<button class="btn sec" style="margin:0;padding:5px 10px;font-size:13px" onclick="setTarget(\''+esc(s.shop)+'\','+(s.target||0)+')">'+(s.target?'แก้':'ตั้ง')+'</button>':'')+'</td></tr>').join('')+'</table></div>';
+  h+='<div class="card"><h2>👤 ช่าง</h2><div class="scroll"><table><tr><th>ชื่อ</th><th>ร้านหลัก</th><th>ขั้นต่ำ/วัน</th><th>ปกส.</th><th>จ่าย</th></tr>'+(INIT.barbers||[]).map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.shop)+'</td><td>'+n(x.min)+'</td><td>'+(x.sso?n(x.sso):'-')+'</td><td>'+(x.daily?'รายวัน':'วันที่ 2')+'</td></tr>').join('')+'</table></div>'+(own?'<button class="btn sec w" onclick="barberForm()">เพิ่ม / แก้ / ช่างออก</button>':'<div class="mute">owner แก้ได้</div>')+'</div>';
+  if(b.ok){ BK=b; h+='<div class="card"><h2>🏦 บัญชีผู้จัดการ — ยอดยกมา</h2><div>'+(b.open==null?'<span class="mute">ยังไม่ได้ตั้ง</span>':n(b.open)+' บาท ณ เช้า '+b.from)+'</div>'+(own?'<button class="btn sec" onclick="bankOpen()">'+(b.open==null?'ตั้งยอดยกมา':'แก้ยอดยกมา')+'</button>':'')+'<div id="bkMsg" class="msg"></div></div>'; }
+  h+='<div class="card"><h2>📖 คู่มือ</h2><div class="mute">พิมพ์ "คู่มือ" ในไลน์ OA ได้ทุกคน · กฎที่ระบบใช้แก้ได้ในแผ่น ตั้งค่า ของ Google Sheet</div><a class="btn sec" style="text-decoration:none;display:inline-block" href="https://docs.google.com/spreadsheets/d/'+(BBO.SHEET_ID||'')+'/edit" target="_blank">เปิด Google Sheet</a></div>';
+  el.innerHTML=h; }
 
 /* ---------- เงินเดือน ---------- */
 let P_YM=(()=>{const d=new Date();d.setDate(0);const m=todayStr(d).slice(0,7);return m<(BBO.START_YM||'2026-11')?(BBO.START_YM||'2026-11'):m;})();
@@ -366,7 +408,7 @@ async function pPay(el){ const d=await api({api:'payroll',ym:P_YM}); if(!d.ok) t
   let h='<div class="card"><div class="row"><h2>💰 เงินเดือน</h2>'+monthSel('pYm',P_YM,'P_YM=this.value;go(\'pay\',true)')+'</div><div class="mute">สถานะ: '+(d.paid?'โอนแล้ว ✓ ส่งสลิปแล้ว':d.closed?'ปิดงวดแล้ว รอโอน':'ยังไม่ปิดงวด')+' · รวมจ่ายวันที่ 2 <b>'+n(d.total)+'</b> บาท</div>';
   h+='<div class="scroll"><table><tr><th>ช่าง</th><th>วัน</th><th>หัว</th><th>ค่าแรง</th><th>โบนัส</th><th>เบิก</th><th>ปกส.</th><th>จ่ายรายวัน</th><th>สุทธิ</th></tr>'+d.people.map(p=>'<tr><td>'+p.name+' <small class="mute">'+p.shop+'</small></td><td>'+p.days+'</td><td>'+p.heads+'</td><td>'+n(p.wage)+'</td><td>'+n(p.bonus)+'</td><td>'+n(p.advance)+'</td><td>'+n(p.sso)+'</td><td>'+n(p.dailyPaid)+'</td><td><b>'+n(p.net)+'</b></td></tr>').join('')+'</table></div>';
   h+='<table style="margin-top:8px"><tr><th>ร้าน</th><th>หัว</th><th>เป้า</th><th>ผล</th></tr>'+d.shops.map(s=>'<tr><td>'+s.shop+'</td><td>'+s.heads+'</td><td>'+s.target+'</td><td>'+s.hit+'</td></tr>').join('')+'</table>';
-  if(ME.role==='owner'){ h+='<div class="row">'+(d.closed?'':'<button class="btn warn" onclick="closeMonth()">🔒 ปิดงวด '+P_YM+'</button>')+(d.paid?'':'<button class="btn ok" onclick="paidForm()">✅ โอนแล้ว + ส่งสลิป</button>')+'</div><button class="btn sec w" onclick="barberForm()">👤 จัดการช่าง</button>'; }
+  if(ME.role==='owner'){ h+='<div class="row">'+(d.closed?'':'<button class="btn warn" onclick="closeMonth()">🔒 ปิดงวด '+P_YM+'</button>')+(d.paid?'':'<button class="btn ok" onclick="paidForm()">✅ โอนแล้ว + ส่งสลิป</button>')+'</div>'; }
   h+='<div id="pMsg" class="msg"></div></div>'; el.innerHTML=h; window.PAY=d; }
 async function closeMonth(){ if(!(await confirmA('ปิดงวด '+P_YM+'?\nตรวจว่าผู้จัดการกรอกยอดครบแล้ว','ปิดงวด'))) return; msg('pMsg','กำลังปิดงวด…','warn'); const r=await api({api:'close_month',ym:P_YM}); msg('pMsg',r.msg,r.ok?'ok':'err'); if(r.ok) go('pay',true); }
 function paidForm(){ modal('<h2>✅ โอนแล้ว '+P_YM+'</h2><div class="mute">แนบรูปสลิปโอนต่อคน (ไม่บังคับ) → ระบบส่งสลิป PDF + รูปเข้าไลน์ช่าง และเก็บใน Drive</div>'+PAY.people.map(p=>'<label>'+p.name+' — สุทธิ '+n(p.net)+' บาท</label><input type="file" accept="image/*" data-name="'+esc(p.name)+'" class="slipImg">').join('')+'<button class="btn ok w" id="paidBtn" onclick="sendPaid()">ยืนยันโอนแล้ว + ส่งสลิป</button><div id="paidMsg" class="msg"></div>'); }

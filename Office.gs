@@ -10,6 +10,7 @@ function officeApi(a, p) {
     case 'expense_add': return expenseAdd(a, p);
     case 'expense_list': return { ok: true, rows: byDateDesc(expenseRows(p.ym)).slice(0, 200) };
     case 'cash_list': return { ok: true, rows: byDateDesc(cashRows(p.ym)), balance: cashBalance() };
+    case 'cash_reset': return cashReset(a, p);
     case 'pond': return pondData();
     case 'pond_paid': return pondPaid(a, p);
     case 'pond_unpay': return pondUnpay(a, p);
@@ -83,7 +84,37 @@ function todayData(dateStr) {
   const punched = t.map(r => r.name); const notYet = act.filter(b => !punched.includes(b.name)).map(b => b.name);
   const ymStr = day.slice(0, 7); const tg = targets(ymStr); const md = dailyRows(r => r.d.slice(0, 7) === ymStr);
   const mtd = S.map(s => ({ shop: s, heads: md.filter(r => r.shop === s).reduce((a, r) => a + r.heads, 0), target: tg[s] || 0, sales: md.filter(r => r.shop === s).reduce((a, r) => a + r.sales, 0) }));
-  return { ok: true, date: day, byShop, notYet, mtd, cash: cashBalance(), pond: pondData().today, recent: byDateDesc(expenseRows(ymStr)).slice(0, 8), lastCollect: byDateDesc(cashRows()).slice(0, 3), home: (() => { try { return homeData(); } catch (e) { return null; } })(), bank: (() => { try { const b = bankData(); return { balance: b.balance, open: b.open, from: b.from, last: b.days[0] || null, check: b.checks[0] || null }; } catch (e) { return null; } })(), perBarber: d.map(r => ({ name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid })).sort((a, b) => S.indexOf(a.shop) - S.indexOf(b.shop) || (a.name < b.name ? -1 : 1)) };
+  return { ok: true, date: day, byShop, notYet, mtd, alerts: alertList(day), cash: cashBalance(), pond: pondData().today, recent: byDateDesc(expenseRows(ymStr)).slice(0, 8), lastCollect: byDateDesc(cashRows()).slice(0, 3), home: (() => { try { return homeData(); } catch (e) { return null; } })(), bank: (() => { try { const b = bankData(); return { balance: b.balance, open: b.open, from: b.from, last: b.days[0] || null, check: b.checks[0] || null }; } catch (e) { return null; } })(), perBarber: d.map(r => ({ name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid })).sort((a, b) => S.indexOf(a.shop) - S.indexOf(b.shop) || (a.name < b.name ? -1 : 1)) };
+}
+
+/** กล่องเตือนหน้าแรก — รวมสิ่งที่ค้าง/ผิดปกติ (ไม่รวมโอนปอน/บัญชี ซึ่งหน้าเว็บเติมเองจาก pond/bank) */
+function alertList(day) {
+  const out = []; const today = ymd(todayBkk()); const S = shops().map(s => s.name);
+  // 1) เมื่อวานยังไม่กรอกยอด (นับตั้งแต่วันเริ่มระบบ) — ร้านที่มีคนลงเวลาแต่ไม่มีแถวยอด
+  const y = ymd(new Date(todayBkk().getTime() - 86400000));
+  if (y >= START_DATE) { const d = dailyRows(r => r.d === y), t = timeRows(r => r.d === y && !!r.tin); const miss = S.filter(s => t.some(r => r.shop === s) && !d.some(r => r.shop === s)); if (miss.length) out.push({ t: '✏️ ยังไม่กรอกยอด ' + y.slice(5) + ': ' + miss.join(', '), go: 'daily', b: 'กรอก' }); }
+  // 2) ลารออนุมัติ
+  try { const w = leaveRows(r => r.d >= today && !r.approved); const names = []; w.forEach(r => { if (!names.includes(r.name)) names.push(r.name); }); if (names.length) out.push({ t: '⏳ ลารออนุมัติ: ' + names.join(', '), go: 'lv', b: 'ดู' }); } catch (e) {}
+  // 3) โอนที่กรอกไว้ไม่ตรงสลิป (7 วันล่าสุด)
+  try { const from = ymd(new Date(todayBkk().getTime() - 7 * 86400000)); const d = dailyRows(r => r.d >= from && r.d < today && r.transfer > 0); const sl = slipRows(x => x.d >= from && slipCounted(x) && x.amount != null); const tips = expenseRows().filter(x => x.d >= from && x.type === 'ทิปช่าง');
+    const bad = d.filter(r => { const s = sl.filter(x => x.d === r.d && x.shop === r.shop && x.name === r.name).reduce((a, x) => a + num(x.amount), 0); const tp = tips.filter(x => x.d === r.d && x.name === r.name).reduce((a, x) => a + x.amt, 0); return s !== r.transfer + tp; });
+    if (bad.length) out.push({ t: '🧾 สลิปไม่ตรงยอดโอน ' + bad.length + ' รายการ (' + bad.slice(0, 3).map(r => r.name + ' ' + r.d.slice(5)).join(', ') + (bad.length > 3 ? ' …' : '') + ')', go: 'daily', b: 'ดู' }); } catch (e) {}
+  // 4) ช่างลืมกดเลิกงาน (เมื่อวาน)
+  const noOut = timeRows(r => r.d === y && !!r.tin && !r.tout).map(r => r.name); if (noOut.length) out.push({ t: '🕗 ไม่ได้กดเลิกงาน ' + y.slice(5) + ': ' + noOut.join(', ') });
+  return out;
+}
+/** ตั้งต้นเงินสดใหม่: นับเงินจริง ณ สิ้นวัน D → ตั้งค่า!K = ยอดนับได้, L = D+1 (เริ่มนับใหม่วันถัดไป) · บันทึกประวัติไว้ในแผ่น เงินสด (วิธี "นับเงิน") */
+function cashReset(a, p) {
+  const shop = clean(p.shop, 20); const i = shops().findIndex(s => s.name === shop); if (i < 0) return { ok: false, msg: 'ไม่พบร้าน' };
+  const amt = num(p.amount); if (!(amt >= 0) || p.amount === '') return { ok: false, msg: 'ใส่ยอดเงินสดที่นับได้' };
+  const d = parseYmd(p.date) ? p.date : ymd(todayBkk()); if (d > ymd(todayBkk())) return { ok: false, msg: 'วันที่ต้องไม่เกินวันนี้' };
+  const next = new Date(parseYmd(d).getTime() + 86400000);
+  const s = sh(SH_SET); s.getRange(S_ROW0 + i, 11).setValue(amt); s.getRange(S_ROW0 + i, 12).setValue(next).setNumberFormat('yyyy-mm-dd');
+  const before = cashBalance(d)[shop]; // ยอดที่ระบบคิดได้ก่อนตั้งต้นใหม่ (ไว้เทียบ)
+  const c = sh(SH_CASH), row = c.getLastRow() + 1; c.getRange(row, 1, 1, 7).setValues([[parseYmd(d), shop, 'นับเงิน', 0, 'ตั้งต้นใหม่ ' + money(amt) + ' (ระบบคิด ' + money(before ? before.balance : 0) + ')', a.name, '']]); c.getRange(row, 1).setNumberFormat('yyyy-mm-dd'); // จำนวน 0 = ไม่กระทบยอดเก็บ · ไม่แตะคอลัมน์ H (สูตร)
+  clearMemo();
+  const diff = before ? amt - before.balance : 0;
+  return { ok: true, msg: 'ตั้งต้น ' + shop + ' = ' + money(amt) + ' บาท เริ่มนับใหม่ ' + ymd(next) + (diff ? ' · ต่างจากที่ระบบคิด ' + (diff > 0 ? '+' : '') + money(diff) : ' · ตรงกับระบบ ✓') };
 }
 
 /* ---------- รายเดือน ---------- */
