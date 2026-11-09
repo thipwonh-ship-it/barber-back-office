@@ -65,16 +65,21 @@
       <div class="chips" id="qDays"></div>
       <div id="qBody" class="mute">กำลังโหลด…</div>
       <div class="row"><button class="btn sec" style="font-size:16px;padding:13px" onclick="openBook()">+ จองคิว</button><button class="btn sec" style="font-size:16px;padding:13px" onclick="openLeave()">🏖️ ขอลาหยุด</button></div>
-      <button class="btn sec" style="font-size:16px;padding:13px" onclick="sickToday()">🤒 ลาป่วยวันนี้</button>
       <div id="lvList"></div>
     </div>
     <div class="card">
-      <h2>เมนู</h2>
+      <h2>💵 เงิน</h2>
       <div class="menu">
         <button onclick="openCash()">💵 หยิบเงินสด</button>
         <button onclick="openCollect()">🏦 เก็บเงินสด</button>
+      </div>
+      <div class="mute" style="margin-top:8px">หยิบเงินสด = รีวิว / ขายของ / ซื้อของให้ร้าน · เก็บเงินสด = ดีนมาเก็บ หรือโอนเข้าธนาคาร (แนบสลิป)</div>
+    </div>
+    <div class="card">
+      <h2>🧾 สรุป / คู่มือ</h2>
+      <div class="menu">
         <button onclick="openSlip()">🧾 สลิป / สรุปของฉัน</button>
-        <button onclick="run('sendManualMe',TOK)">📖 คู่มือ (ส่งเข้าไลน์)</button>
+        <button onclick="manualMe(this)">📖 คู่มือ (ส่งเข้าไลน์)</button>
       </div>
     </div>
   </div>
@@ -101,6 +106,8 @@
     <label>ประเภท</label><select id="lReason"></select>
     <label>เหตุผล</label><input id="lNote" placeholder="เช่น กลับบ้านต่างจังหวัด">
     <button class="btn" id="lBtn" onclick="sendLeave()">ส่งคำขอลา</button><div id="lMsg" class="msg" style="white-space:pre-line"></div>
+    <div class="mute" style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px">ป่วยวันนี้ ไม่ต้องกรอกข้างบน — กดปุ่มเดียว</div>
+    <button class="btn sec" onclick="sickToday()">🤒 ลาป่วยวันนี้</button>
   </div></div>
   <div class="modal" id="shareBox" style="align-items:center"><div class="card" style="width:92%;max-width:380px;border-radius:16px">
     <h2 id="shT"></h2><div id="shM" class="mute" style="white-space:pre-line"></div>
@@ -186,6 +193,7 @@
       WHO.today=r.today; renderToday(r.today); show('msg',r.msg,r.late>0?'warn':'ok'); }
     catch(e){ show('msg','เชื่อมต่อไม่ได้: '+e.message,'err'); renderToday(WHO.today); } }
 
+  async function manualMe(b){ b.disabled=true; b.textContent='กำลังส่ง…'; try{ await run('sendManualMe',TOK); b.textContent='📖 ส่งคู่มือเข้าไลน์แล้ว ✓'; }catch(e){ b.textContent='📖 คู่มือ (ส่งเข้าไลน์)'; } b.disabled=false; }
   function openCash(){ $('cMsg').style.display='none'; $('cDetail').value=''; open('cashBox'); }
   function cashReason(){ const m=/\((\d+)\)/.exec($('cReason').value); $('cAmt').value=m?m[1]:''; $('cAmt').readOnly=!!m; }
   async function sendCash(){ $('cBtn').disabled=true; show('cMsg','กำลังบันทึก…','warn'); try{ const r=await run('cashTake',TOK,{shop:$('cShop').value,reason:$('cReason').value,amount:$('cAmt').value,detail:$('cDetail').value}); $('cBtn').disabled=false; show('cMsg',r.msg,r.ok?'ok':'err'); if(r.ok) setTimeout(()=>close('cashBox'),1500);}catch(e){$('cBtn').disabled=false;show('cMsg','เชื่อมต่อไม่ได้','err');} }
@@ -241,7 +249,7 @@
     try{ const r=await run('leaveMe',TOK,{from:$('lFrom').value,to:$('lTo').value,reason:$('lReason').value,note:$('lNote').value,force:!!force}); $('lBtn').disabled=false;
       if(!r.ok){ if(r.needConfirm&&await ask(r.msg,'มีคิวลูกค้าวันนั้น')) return sendLeave(true); show('lMsg',r.msg,'err'); return; }
       close('leaveBox'); loadQ(); shareOpen(r.msg,r.share); }catch(e){ $('lBtn').disabled=false; show('lMsg','เชื่อมต่อไม่ได้','err'); } }
-  async function sickToday(){ const t=ymdL(new Date()); if(!await ask('ลาป่วยวันนี้ ('+new Date().toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short'})+')?\nระบบส่งคำขอให้ปิ๊กอนุมัติ และแจ้งคิวลูกค้าที่ต้องย้าย','🤒 ลาป่วยวันนี้')) return;
+  async function sickToday(){ close('leaveBox'); const t=ymdL(new Date()); if(!await ask('ลาป่วยวันนี้ ('+new Date().toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short'})+')?\nระบบส่งคำขอให้ปิ๊กอนุมัติ และแจ้งคิวลูกค้าที่ต้องย้าย','🤒 ลาป่วยวันนี้')) return;
     try{ const r=await run('leaveMe',TOK,{from:t,to:t,reason:'ลาป่วย',note:'ป่วย (กดจากปุ่มลาป่วย)',force:true}); if(!r.ok){ await ask(r.msg,'แจ้งเตือน',true); return; } loadQ(t); shareOpen(r.msg,r.share); }catch(e){ await ask('เชื่อมต่อไม่ได้','แจ้งเตือน',true); } }
   async function cancelLeave(id){ if(!await ask('ยกเลิกใบลา '+id+'?','ยกเลิกลา')) return; const r=await run('leaveCancelMe',TOK,id); if(!r.ok){ await ask(r.msg,'แจ้งเตือน',true); return; } loadQ(); shareOpen(r.msg,r.share); }
   start();
