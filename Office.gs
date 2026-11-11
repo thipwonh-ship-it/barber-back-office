@@ -55,7 +55,7 @@ function addList(k, v) { const l = list(k); if (!l.includes(v)) l.push(v); P().s
 function monthList() { const out = []; const d = todayBkk(); for (let i = 0; i < 14; i++) { if (ym(d) < START_YM) break; out.push(ym(d)); d.setMonth(d.getMonth() - 1); } return out; }
 
 /* ---------- อ่านแผ่น ---------- */
-function rowsOf(name, cols) { const s = sh(name); const n = s.getLastRow() - 1; return n < 1 ? [] : s.getRange(2, 1, n, cols).getValues(); }
+function rowsOf(name, cols) { return memoRead('rows:' + name + ':' + cols, () => { const s = sh(name); const n = s.getLastRow() - 1; return n < 1 ? [] : s.getRange(2, 1, n, cols).getValues(); }); }
 function dailyRows(filter) { return rowsOf(SH_DAILY, D_BY).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[D_SHOP - 1]).trim(), name: String(r[D_NAME - 1]).trim(), heads: num(r[D_HEADS - 1]), sales: num(r[D_SALES - 1]), cash: num(r[D_CASH - 1]), transfer: num(r[D_TRANSFER - 1]), calc: num(r[D_CALC - 1]), over: r[D_OVER - 1] === '' ? '' : num(r[D_OVER - 1]), paid: num(r[D_PAID - 1]), note: String(r[D_NOTE - 1] || ''), by: String(r[D_BY - 1] || '') })).filter(x => x.d >= START_DATE && (!filter || filter(x))); }
 function expenseRows(ymStr) { return rowsOf(SH_EXP, X_FROM).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[X_SHOP - 1]).trim(), type: String(r[X_TYPE - 1]).trim(), name: String(r[X_NAME - 1] || '').trim(), amt: num(r[X_AMT - 1]), detail: String(r[X_DETAIL - 1] || ''), by: String(r[X_BY - 1] || ''), link: String(r[X_LINK - 1] || ''), from: String(r[X_FROM - 1] || '') })).filter(x => x.d >= START_DATE && (!ymStr || x.d.slice(0, 7) === ymStr)); }
 function cashRows(ymStr) { return rowsOf(SH_CASH, C_LINK).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[C_SHOP - 1]).trim(), method: String(r[C_METHOD - 1]), amt: num(r[C_AMT - 1]), who: String(r[C_WHO - 1] || ''), by: String(r[C_BY - 1] || ''), link: String(r[C_LINK - 1] || '') })).filter(x => x.d >= START_DATE && (!ymStr || x.d.slice(0, 7) === ymStr)); }
@@ -194,7 +194,7 @@ function expenseAdd(a, p) {
 }
 
 /* ---------- โอนปอนรายวัน (ปิ๊ก) ---------- */
-function dailyPayRows() { const s = ss().getSheetByName(SH_DAILYPAY); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 7).getValues().map(r => ({ paidOn: dateKey(r[0]), name: String(r[1]).trim(), forDate: dateKey(r[2]), amt: num(r[3]), by: String(r[4] || ''), link: String(r[5] || '') })).filter(x => x.forDate >= START_DATE); }
+function dailyPayRows() { return memoRead('dailypay', () => { const s = ss().getSheetByName(SH_DAILYPAY); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 7).getValues(); }).map(r => ({ paidOn: dateKey(r[0]), name: String(r[1]).trim(), forDate: dateKey(r[2]), amt: num(r[3]), by: String(r[4] || ''), link: String(r[5] || '') })).filter(x => x.forDate >= START_DATE); }
 function pondData() {
   const dailyB = barbers(false).filter(b => b.daily); const paid = dailyPayRows(); const today = todayBkk(); const out = { ok: true, barbers: [], today: [] };
   // เริ่มนับโอนรายวันตั้งแต่วันเริ่มใช้ระบบ (START_DATE) — ก่อนหน้านั้นจ่ายไปแล้วนอกระบบ
@@ -297,8 +297,7 @@ function bankCfg() {
   return { shop: String(v[0][1]).trim() || 'โลตัส', open: v[1][1] === '' ? null : num(v[1][1]), from: dateKey(v[2][1]) || START_DATE };
 }
 function bankRows() {
-  const s = ss().getSheetByName(SH_BANK); if (!s || s.getLastRow() < 2) return [];
-  return s.getRange(2, 1, s.getLastRow() - 1, 13).getValues().map((r, i) => ({ row: i + 2, id: String(r[0]), d: dateKey(r[1]), kind: String(r[2]), type: String(r[3]), shop: String(r[4] || ''), name: String(r[5] || ''), amt: num(r[6]), detail: String(r[7] || ''), status: String(r[8] || ''), by: String(r[9] || ''), at: String(r[10] || ''), link: String(r[11] || ''), expect: r[12] === '' ? null : num(r[12]) })).filter(x => x.id);
+  return memoRead('bank', () => { const s = ss().getSheetByName(SH_BANK); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 13).getValues(); }).map((r, i) => ({ row: i + 2, id: String(r[0]), d: dateKey(r[1]), kind: String(r[2]), type: String(r[3]), shop: String(r[4] || ''), name: String(r[5] || ''), amt: num(r[6]), detail: String(r[7] || ''), status: String(r[8] || ''), by: String(r[9] || ''), at: String(r[10] || ''), link: String(r[11] || ''), expect: r[12] === '' ? null : num(r[12]) })).filter(x => x.id);
 }
 function bankData() {
   const c = bankCfg(); const from = c.from;
@@ -378,8 +377,7 @@ function homeSheet() {
   s.getRange('A:A').setNumberFormat('yyyy-mm-dd'); s.getRange('B:B').setNumberFormat('0'); s.getRange('C:C').setNumberFormat('#,##0'); return s;
 }
 function homeRows() {
-  const s = ss().getSheetByName(SH_HOME); if (!s || s.getLastRow() < 2) return [];
-  return s.getRange(2, 1, s.getLastRow() - 1, 7).getValues().map((r, i) => ({ row: i + 2, d: dateKey(r[0]), heads: num(r[1]), sales: r[2] === '' ? null : num(r[2]), closed: String(r[3]) === 'ไม่ได้เปิด', note: String(r[4] || ''), by: String(r[5] || ''), at: String(r[6] || '') })).filter(x => x.d >= START_DATE);
+  return memoRead('home', () => { const s = ss().getSheetByName(SH_HOME); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 7).getValues(); }).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), heads: num(r[1]), sales: r[2] === '' ? null : num(r[2]), closed: String(r[3]) === 'ไม่ได้เปิด', note: String(r[4] || ''), by: String(r[5] || ''), at: String(r[6] || '') })).filter(x => x.d >= START_DATE);
 }
 function homeData() {
   const rows = homeRows(); const today = todayBkk(); const map = {}; rows.forEach(x => map[x.d] = x);

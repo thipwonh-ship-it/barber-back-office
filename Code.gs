@@ -41,6 +41,10 @@ const START_YM = START_DATE.slice(0, 7);
 // memo ต่อ 1 execution (ลดเวลา openById/อ่านแผ่นซ้ำ) — เรียก clearMemo() หลังแก้แผ่น ตั้งค่า
 const _M = {};
 function clearMemo() { Object.keys(_M).forEach(k => delete _M[k]); }
+/** อ่านแผ่นครั้งเดียวต่อ request เมื่อเป็น API อ่านอย่างเดียว (_M.ro) — API ที่เขียนข้อมูลไม่ใช้ cache เพื่อไม่ให้อ่านค่าเก่า */
+function memoRead(key, fn) { if (!_M.ro) return fn(); _M.rv = _M.rv || {}; if (!(key in _M.rv)) _M.rv[key] = fn(); return _M.rv[key]; }
+const RO_API = ['init', 'today', 'month', 'daily_get', 'expense_list', 'cash_list', 'pond', 'payroll', 'bank', 'home', 'q_day', 'q_check', 'q_cust'];
+const RO_FN = ['whoAmI', 'mySummary', 'qMyDay'];
 function ss() { return _M.ss || (_M.ss = SpreadsheetApp.openById(SHEET_ID())); }
 function sh(n) { if (_M['sh:' + n]) return _M['sh:' + n]; const s = ss().getSheetByName(n); if (!s) throw new Error('ไม่พบแผ่น ' + n); return (_M['sh:' + n] = s); }
 function ymd(d) { return Utilities.formatDate(d, TZ, 'yyyy-MM-dd'); }
@@ -191,12 +195,12 @@ function apiJson(p) {
       else { const tok = newSession(v.uid, v.name); out = { ok: true, tok, name: clean(v.name, 40), who: whoAmI(tok) }; }
     } else if (p.api === 'staff') {
       const fns = { whoAmI, bindLine, sendManualMe, punch, cashTake, cashCollect, mySummary, mySlipPdf, qMyDay, qBook, qMark, qCheckMe, leaveMe, leaveCancelMe };
-      const fn = fns[String(p.fn || '')]; const args = Array.isArray(p.args) ? p.args : [];
+      const fn = fns[String(p.fn || '')]; const args = Array.isArray(p.args) ? p.args : []; _M.ro = RO_FN.includes(String(p.fn || ''));
       if (!fn) out = { ok: false, msg: 'ไม่รู้จักคำสั่ง' };
       else if (!session(args[0])) out = { ok: false, msg: 'หมดเวลา กรุณาปิดแล้วกดเมนูในไลน์ใหม่' };
       else out = fn.apply(null, args);
     } else if (p.api === 'adtcheck') { const a = adminFromAdt(p.adt); out = a ? { ok: true, name: a.name, role: a.role } : { ok: false }; }
-    else { const a = adminFromAdt(p.adt); if (!a) out = { ok: false, expired: true, msg: 'หมดอายุ กรุณาล็อกอิน LINE ใหม่' }; else out = officeApi(a, p); }
+    else { const a = adminFromAdt(p.adt); if (!a) out = { ok: false, expired: true, msg: 'หมดอายุ กรุณาล็อกอิน LINE ใหม่' }; else { _M.ro = RO_API.includes(String(p.api || '')); out = officeApi(a, p); } }
   } catch (err) { out = { ok: false, msg: String(err && err.message || err) }; }
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }

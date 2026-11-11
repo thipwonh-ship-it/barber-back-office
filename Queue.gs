@@ -56,8 +56,7 @@ function qSheet() {
   return s;
 }
 function qRows(filter) {
-  const s = qSheet(); const n = s.getLastRow() - 1; if (n < 1) return [];
-  return s.getRange(2, 1, n, Q_HEAD.length).getValues().map((r, i) => ({ row: i + 2, d: dateKey(r[0]), start: tStr(r[1]), end: tStr(r[2]), shop: String(r[3]).trim(), name: String(r[4]).trim(), cust: String(r[5] || ''), phone: String(r[6] || ''), ch: String(r[7] || ''), status: String(r[8] || 'จอง').trim(), by: String(r[9] || ''), at: String(r[10] || ''), id: String(r[11] || ''), sent: String(r[12] || ''), note: String(r[13] || ''), svc: String(r[14] || '').trim() || SVC_CUT })).filter(x => x.id && (!filter || filter(x)));
+  return memoRead('q', () => { const s = qSheet(); const n = s.getLastRow() - 1; return n < 1 ? [] : s.getRange(2, 1, n, Q_HEAD.length).getValues(); }).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), start: tStr(r[1]), end: tStr(r[2]), shop: String(r[3]).trim(), name: String(r[4]).trim(), cust: String(r[5] || ''), phone: String(r[6] || ''), ch: String(r[7] || ''), status: String(r[8] || 'จอง').trim(), by: String(r[9] || ''), at: String(r[10] || ''), id: String(r[11] || ''), sent: String(r[12] || ''), note: String(r[13] || ''), svc: String(r[14] || '').trim() || SVC_CUT })).filter(x => x.id && (!filter || filter(x)));
 }
 function qById(id) { id = String(id || '').trim().toUpperCase(); if (!/^Q\d+$/.test(id)) return null; return qRows(x => x.id === id)[0] || null; }
 function lvReason(note) { return (/·\s*([^·]+?)\s*·/.exec(String(note || '')) || [])[1] || ''; }

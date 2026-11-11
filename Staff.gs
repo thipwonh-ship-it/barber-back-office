@@ -124,8 +124,7 @@ function slipSheet() {
   s = ss().insertSheet(SH_SLIP); s.getRange('A1:L1').setValues([['วันที่', 'ช่าง', 'ร้าน', 'ยอดที่อ่านได้', 'ยอดที่แก้', 'เลขอ้างอิง', 'hash', 'ลิงก์สลิป', 'เวลาส่ง', 'หมายเหตุ', 'ชุด', 'คีย์ ยอด|วัน|เวลาโอน']]).setFontWeight('bold'); s.setFrozenRows(1); return s;
 }
 function slipRows(filter) {
-  const s = ss().getSheetByName(SH_SLIP); if (!s || s.getLastRow() < 2) return [];
-  return s.getRange(2, 1, s.getLastRow() - 1, 12).getValues().map((r, i) => ({ set: String(r[10] || ''), key: String(r[11] || ''), row: i + 2, d: dateKey(r[0]), name: String(r[1]).trim(), shop: String(r[2]).trim(), read: r[3] === '' ? null : num(r[3]), fix: r[4] === '' ? null : num(r[4]), ref: String(r[5] || ''), hash: String(r[6] || ''), link: String(r[7] || ''), at: tStr(r[8]), note: String(r[9] || '') }))
+  return memoRead('slip', () => { const s = ss().getSheetByName(SH_SLIP); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 12).getValues(); }).map((r, i) => ({ set: String(r[10] || ''), key: String(r[11] || ''), row: i + 2, d: dateKey(r[0]), name: String(r[1]).trim(), shop: String(r[2]).trim(), read: r[3] === '' ? null : num(r[3]), fix: r[4] === '' ? null : num(r[4]), ref: String(r[5] || ''), hash: String(r[6] || ''), link: String(r[7] || ''), at: tStr(r[8]), note: String(r[9] || '') }))
     .map(x => (x.amount = x.fix != null ? x.fix : x.read, x)).filter(filter || (() => true));
 }
 /** อ่านข้อความจากรูปด้วย OCR ของ Google Drive (แปลงเป็น Google Doc ชั่วคราวแล้วลบ) */
@@ -292,8 +291,7 @@ function noteSheet() {
   s = ss().insertSheet(SH_NOTE); s.getRange('A1:K1').setValues([['วันที่', 'ช่าง', 'ร้าน', 'เงินสดนับได้', 'ลูกค้า (คน)', 'ข้อความ', 'เวลาส่ง', 'หมายเหตุ', 'ลูกค้าใหม่', 'ลูกค้าประจำ', 'ที่มาลูกค้าใหม่']]).setFontWeight('bold'); s.setFrozenRows(1); return s;
 }
 function noteRows(filter) {
-  const s = ss().getSheetByName(SH_NOTE); if (!s || s.getLastRow() < 2) return [];
-  return s.getRange(2, 1, s.getLastRow() - 1, 11).getValues().map((r, i) => ({ row: i + 2, d: dateKey(r[0]), name: String(r[1]).trim(), shop: String(r[2]).trim(), cash: r[3] === '' ? null : num(r[3]), customers: r[4] === '' ? null : num(r[4]), text: String(r[5] || ''), at: tStr(r[6]), note: String(r[7] || ''), newC: r[8] === '' ? null : num(r[8]), regC: r[9] === '' ? null : num(r[9]), sources: String(r[10] || '') })).filter(filter || (() => true));
+  return memoRead('note', () => { const s = ss().getSheetByName(SH_NOTE); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 11).getValues(); }).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), name: String(r[1]).trim(), shop: String(r[2]).trim(), cash: r[3] === '' ? null : num(r[3]), customers: r[4] === '' ? null : num(r[4]), text: String(r[5] || ''), at: tStr(r[6]), note: String(r[7] || ''), newC: r[8] === '' ? null : num(r[8]), regC: r[9] === '' ? null : num(r[9]), sources: String(r[10] || '') })).filter(filter || (() => true));
 }
 /** อ่านข้อความสรุป: บรรทัด "แบงก์=ยอด" (1000=3000), "รวม3168", "ลูกค้า3คน" → null ถ้าไม่ใช่ข้อความสรุป */
 function parseShopNote(text) {
