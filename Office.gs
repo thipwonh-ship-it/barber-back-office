@@ -56,9 +56,17 @@ function monthList() { const out = []; const d = todayBkk(); for (let i = 0; i <
 
 /* ---------- อ่านแผ่น ---------- */
 /** อ่านแผ่นตั้งแต่แถวแรกที่วันที่ ≥ START_DATE (ข้อมูลเก่าจาก Excel 1,343 แถวอยู่ด้านบน ไม่ต้องอ่าน) — อ่านคอลัมน์ A ก่อนเพื่อหาจุดเริ่ม ถูกกว่าอ่านทั้งแผ่น 16 คอลัมน์ ~10 เท่า */
-function rowsOf(name, cols) { return memoRead('rows:' + name + ':' + cols, () => { const s = sh(name); const n = s.getLastRow() - 1; if (n < 1) return [];
-  const a = s.getRange(2, 1, n, 1).getValues(); let i = 0; while (i < n && dateKey(a[i][0]) < START_DATE) i++; // แถวเก่าอยู่บนสุด เรียงตามวัน
-  return i >= n ? [] : s.getRange(2 + i, 1, n - i, cols).getValues().map((r, k) => { r.__row = 2 + i + k; return r; }); }); }
+function rowsOf(name, cols) { return memoRead('rows:' + name + ':' + cols, () => { const s = sh(name); const last = s.getLastRow(); if (last < 2) return [];
+  const r0 = startRow(s, name, last); return r0 > last ? [] : s.getRange(r0, 1, last - r0 + 1, cols).getValues().map((r, k) => { r.__row = r0 + k; return r; }); }); }
+/** แถวแรกที่วันที่ ≥ START_DATE — จำไว้ใน CacheService 6 ชม. แล้วตรวจแค่ 2 เซลล์ (แถวนั้น ≥ START และแถวก่อนหน้า < START) · ถ้าไม่ตรงค่อยสแกนคอลัมน์ A ใหม่ */
+function startRow(s, name, last) {
+  const key = 'sr:' + name; let c = null; try { c = CacheService.getScriptCache(); } catch (e) {}
+  let r = c ? +c.get(key) : 0;
+  if (r >= 2 && r <= last) { const v = s.getRange(Math.max(2, r - 1), 1, r === 2 ? 1 : 2, 1).getValues(); const cur = dateKey(v[v.length - 1][0]), prev = r === 2 ? '' : dateKey(v[0][0]); if (cur >= START_DATE && prev < START_DATE) return r; }
+  const a = s.getRange(2, 1, last - 1, 1).getValues(); let i = 0; while (i < a.length && dateKey(a[i][0]) < START_DATE) i++; r = 2 + i; // แถวเก่าอยู่บนสุด
+  if (c) try { c.put(key, String(r), 21600); } catch (e) {}
+  return r;
+}
 function dailyRows(filter) { return memoRead('m:daily', () => rowsOf(SH_DAILY, D_BY).map(r => ({ row: r.__row, d: dateKey(r[0]), shop: String(r[D_SHOP - 1]).trim(), name: String(r[D_NAME - 1]).trim(), heads: num(r[D_HEADS - 1]), sales: num(r[D_SALES - 1]), cash: num(r[D_CASH - 1]), transfer: num(r[D_TRANSFER - 1]), calc: num(r[D_CALC - 1]), over: r[D_OVER - 1] === '' ? '' : num(r[D_OVER - 1]), paid: num(r[D_PAID - 1]), note: String(r[D_NOTE - 1] || ''), by: String(r[D_BY - 1] || '') }))).filter(x => x.d >= START_DATE && (!filter || filter(x))); }
 function expenseRows(ymStr) { return memoRead('m:exp', () => rowsOf(SH_EXP, X_FROM).map(r => ({ row: r.__row, d: dateKey(r[0]), shop: String(r[X_SHOP - 1]).trim(), type: String(r[X_TYPE - 1]).trim(), name: String(r[X_NAME - 1] || '').trim(), amt: num(r[X_AMT - 1]), detail: String(r[X_DETAIL - 1] || ''), by: String(r[X_BY - 1] || ''), link: String(r[X_LINK - 1] || ''), from: String(r[X_FROM - 1] || '') }))).filter(x => x.d >= START_DATE && (!ymStr || x.d.slice(0, 7) === ymStr)); }
 function cashRows(ymStr) { return memoRead('m:cash', () => rowsOf(SH_CASH, C_LINK).map(r => ({ row: r.__row, d: dateKey(r[0]), shop: String(r[C_SHOP - 1]).trim(), method: String(r[C_METHOD - 1]), amt: num(r[C_AMT - 1]), who: String(r[C_WHO - 1] || ''), by: String(r[C_BY - 1] || ''), link: String(r[C_LINK - 1] || '') }))).filter(x => x.d >= START_DATE && (!ymStr || x.d.slice(0, 7) === ymStr)); }
