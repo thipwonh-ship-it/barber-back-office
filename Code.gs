@@ -47,9 +47,11 @@ const RO_API = ['init', 'today', 'month', 'daily_get', 'expense_list', 'cash_lis
 const RO_FN = ['whoAmI', 'mySummary', 'qMyDay'];
 function ss() { return _M.ss || (_M.ss = SpreadsheetApp.openById(SHEET_ID())); }
 function sh(n) { if (_M['sh:' + n]) return _M['sh:' + n]; const s = ss().getSheetByName(n); if (!s) throw new Error('ไม่พบแผ่น ' + n); return (_M['sh:' + n] = s); }
-function ymd(d) { return Utilities.formatDate(d, TZ, 'yyyy-MM-dd'); }
-function ym(d) { return Utilities.formatDate(d, TZ, 'yyyy-MM'); }
-function hm(d) { return Utilities.formatDate(d, TZ, 'HH:mm'); }
+// วันที่/เวลา แบบเร็ว: ไทย = UTC+7 คงที่ (ไม่มี DST) → บวก 7 ชม. แล้วอ่านแบบ UTC · Utilities.formatDate ช้า ~1 ms/ครั้ง (แผ่น 1,400 แถว = 1.5 วิ)
+const P2 = n => (n < 10 ? '0' : '') + n;
+function ymd(d) { const t = new Date(d.getTime() + 25200000); return t.getUTCFullYear() + '-' + P2(t.getUTCMonth() + 1) + '-' + P2(t.getUTCDate()); }
+function ym(d) { return ymd(d).slice(0, 7); }
+function hm(d) { const t = new Date(d.getTime() + 25200000); return P2(t.getUTCHours()) + ':' + P2(t.getUTCMinutes()); }
 function nowText() { return Utilities.formatDate(new Date(), TZ, 'HH:mm d MMM yyyy'); }
 function todayBkk() { const [y, m, d] = ymd(new Date()).split('-').map(Number); return new Date(y, m - 1, d); }
 function parseYmd(s) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '').trim()); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
