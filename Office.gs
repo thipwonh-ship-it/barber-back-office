@@ -200,23 +200,32 @@ function expenseAdd(a, p) {
   let link = ''; if (p.image) { const f = saveImage(p.image, 'ใบเสร็จ ' + ym(day), ymd(day) + ' ' + shop + ' ' + type + ' ' + money(amt), false); if (f) link = f.url; }
   const x = sh(SH_EXP); const row = x.getLastRow() + 1;
   x.getRange(row, 1, 1, X_LINK).setValues([[day, shop, type, name, amt, clean(p.detail, 150), a.name, link]]); x.getRange(row, X_FROM).setValue(p.from === CASH_FROM ? CASH_FROM : 'โอน/' + a.name); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd');
-  if (type === 'เบิกช่าง') pushBarber(name, '📝 บันทึกเบิกล่วงหน้า ' + money(amt) + ' บาท (' + ymd(day) + ') จะหักจากค่าแรงสิ้นเดือน');
+  if (type === 'เบิกช่าง') pushBarber(name, '📝 บันทึกเบิกล่วงหน้า ' + money(amt) + ' บาท (' + ymd(day) + ') ' + ((barberByName(name) || {}).daily ? 'จะหักจากค่าแรงรายวัน วันละ ' + ADV_PER_DAY + ' · ที่เหลือหักสิ้นเดือน' : 'จะหักจากค่าแรงสิ้นเดือน'));
   return { ok: true, msg: 'บันทึก ' + type + ' ' + money(amt) + ' บาท (' + shop + ')' };
 }
 
 /* ---------- โอนปอนรายวัน (ปิ๊ก) ---------- */
-function dailyPayRows() { return memoRead('dailypay', () => { const s = ss().getSheetByName(SH_DAILYPAY); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 7).getValues(); }).map(r => ({ paidOn: dateKey(r[0]), name: String(r[1]).trim(), forDate: dateKey(r[2]), amt: num(r[3]), by: String(r[4] || ''), link: String(r[5] || '') })).filter(x => x.forDate >= START_DATE); }
+function dailyPayRows() { return memoRead('dailypay', () => { const s = ss().getSheetByName(SH_DAILYPAY); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 8).getValues(); }).map(r => ({ paidOn: dateKey(r[0]), name: String(r[1]).trim(), forDate: dateKey(r[2]), amt: num(r[3]), ded: num(r[7]), by: String(r[4] || ''), link: String(r[5] || '') })).filter(x => x.forDate >= START_DATE); }
 function pondData() {
   const dailyB = barbers(false).filter(b => b.daily); const paid = dailyPayRows(); const today = todayBkk(); const out = { ok: true, barbers: [], today: [] };
   // เริ่มนับโอนรายวันตั้งแต่วันเริ่มใช้ระบบ (START_DATE) — ก่อนหน้านั้นจ่ายไปแล้วนอกระบบ
   const start = START_DATE;
   dailyB.forEach(b => {
-    const rows = byDateDesc(dailyRows(r => r.name === b.name && r.d >= start)).slice(0, 45).map(r => { const pd = paid.find(x => x.name === b.name && x.forDate === r.d); return { d: r.d, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid, paid: !!pd, paidOn: pd ? pd.paidOn : '', link: pd ? pd.link : '' }; });
+    const rows = byDateDesc(dailyRows(r => r.name === b.name && r.d >= start)).slice(0, 45).map(r => { const pd = paid.find(x => x.name === b.name && x.forDate === r.d); return { d: r.d, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid, paid: !!pd, paidOn: pd ? pd.paidOn : '', link: pd ? pd.link : '', ded: pd ? pd.ded : 0 }; });
     const due = rows.filter(r => !r.paid && r.wage > 0 && r.d <= ymd(new Date(today.getTime() - 2 * 86400000)));
-    out.barbers.push({ name: b.name, rows, due, dueTotal: due.reduce((a, r) => a + r.wage, 0) });
+    const mNow = ymd(today).slice(0, 7), mPrev = prevMonth(); // เบิกล่วงหน้า: เดือนนี้ + เดือนก่อน (ยอดของปลายเดือนก่อนอาจยังไม่ได้โอน)
+    out.barbers.push({ name: b.name, shop: b.shop, rows, due, dueTotal: due.reduce((a, r) => a + r.wage, 0), adv: [mNow, mPrev].map(m => advOf(b.name, m, paid)).filter(x => x.total > 0 || x.m === mNow), advDay: ADV_PER_DAY });
     out.today.push({ name: b.name, due: due.length, dueTotal: due.reduce((a, r) => a + r.wage, 0) });
   });
   return out;
+}
+/** เบิกล่วงหน้าของช่างจ่ายรายวัน: เบิก = รายจ่ายประเภท "เบิกช่าง" ของเดือนนั้น · หักแล้ว = คอลัมน์ หักเบิก ของยอดวันที่ในเดือนเดียวกัน
+ *  ที่เหลือตอนสิ้นเดือน แผ่น เงินเดือน หักเองจากสุทธิ (ค่าแรง + โบนัส − เบิก − ปกส. − โอนจริง) */
+const ADV_PER_DAY = 200;
+function advOf(name, m, paid) {
+  const total = expenseRows(m).filter(x => x.type === 'เบิกช่าง' && x.name === name).reduce((a, x) => a + x.amt, 0);
+  const ded = (paid || dailyPayRows()).filter(x => x.name === name && x.forDate.slice(0, 7) === m).reduce((a, x) => a + x.ded, 0);
+  return { m, total, ded, left: Math.max(0, total - ded) };
 }
 /** ยกเลิกรายการ "โอนแล้ว" (กดผิด) — ลบแถวในแผ่น โอนรายวัน */
 function pondUnpay(a, p) {
@@ -229,9 +238,15 @@ function pondPaid(a, p) {
   const name = clean(p.name, 30); const dates = (p.dates || []).map(d => dateKey(d)).filter(Boolean); if (!name || !dates.length) return { ok: false, msg: 'เลือกวันที่' };
   const today = todayBkk(); const s = ss().getSheetByName(SH_DAILYPAY) || (setup(), ss().getSheetByName(SH_DAILYPAY)); const d = dailyRows(r => r.name === name && dates.includes(r.d)); const done = dailyPayRows();
   let link = ''; if (p.image) { const f = saveImage(p.image, 'โอนรายวัน ' + ym(today), ymd(today) + ' ' + name, false); if (f) link = f.url; }
-  let total = 0; const lines = [];
-  d.forEach(r => { if (done.find(x => x.name === name && x.forDate === r.d)) return; s.appendRow([today, name, parseYmd(r.d), r.paid, a.name, link, r.shop + ' ' + r.heads + ' หัว']); total += r.paid; lines.push(r.d + ' ' + money(r.paid)); });
-  if (lines.length) pushBarber(name, '💸 โอนค่าแรงแล้ว ' + money(total) + ' บาท\n' + lines.join('\n') + '\nโดย ' + a.name + ' ' + nowText());
+  let total = 0, dedTotal = 0; const lines = []; const deds = p.deds || {}; const left = {}; // เบิกคงเหลือต่อเดือน (หักได้ไม่เกินนี้)
+  if (s.getRange(1, 8).getValue() === '') s.getRange(1, 8, 1, 2).setValues([['หักเบิก', 'โอนจริง']]);
+  d.sort((x, y) => x.d < y.d ? -1 : 1).forEach(r => { if (done.find(x => x.name === name && x.forDate === r.d)) return;
+    const m = r.d.slice(0, 7); if (!(m in left)) left[m] = advOf(name, m, done).left;
+    const ded = Math.max(0, Math.min(Math.round(num(deds[r.d])), r.paid, left[m])); left[m] -= ded;
+    s.appendRow([today, name, parseYmd(r.d), r.paid, a.name, link, r.shop + ' ' + r.heads + ' หัว', ded || '', r.paid - ded]); total += r.paid - ded; dedTotal += ded;
+    lines.push(r.d + ' ' + money(r.paid) + (ded ? ' − หักเบิก ' + money(ded) + ' = ' + money(r.paid - ded) : '')); });
+  const leftAll = Object.keys(left).reduce((x, k) => x + left[k], 0);
+  if (lines.length) pushBarber(name, '💸 โอนค่าแรงแล้ว ' + money(total) + ' บาท\n' + lines.join('\n') + (dedTotal ? '\nหักเบิกล่วงหน้า ' + money(dedTotal) + ' · เบิกคงเหลือ ' + money(leftAll) : '') + '\nโดย ' + a.name + ' ' + nowText());
   return { ok: true, msg: 'บันทึกโอน ' + name + ' ' + money(total) + ' บาท (' + lines.length + ' วัน)', data: pondData() };
 }
 
@@ -319,7 +334,7 @@ function bankData() {
   const days = {}; const day = k => days[k] = days[k] || { d: k, in: 0, slip: 0, nIn: 0, pond: 0, out: 0 };
   tr.forEach(r => { day(r.d).in += r.transfer; });
   slips.forEach(x => { const o = day(x.d); o.slip += x.amount; o.nIn++; });
-  pays.forEach(x => { day(x.paidOn).pond += x.amt; });
+  pays.forEach(x => { day(x.paidOn).pond += x.amt - x.ded; }); // โอนจริง = ค่าแรง − หักเบิก
   outs.forEach(x => { day(x.d).out += x.amt; });
   const list = Object.values(days).sort((a, b) => a.d < b.d ? -1 : 1); let bal = c.open || 0; list.forEach(o => { bal += o.in - o.pond - o.out; o.bal = bal; o.warn = o.nIn > 0 && o.slip !== o.in; });
   const tot = { warn: list.filter(o => o.warn).length, in: list.reduce((a, o) => a + o.in, 0), pond: list.reduce((a, o) => a + o.pond, 0), out: list.reduce((a, o) => a + o.out, 0) };
@@ -342,7 +357,7 @@ function bankOut(a, p) {
     const id = 'B' + seq('B_SEQ'); const s = bankSheet();
     s.appendRow([id, day, 'ออก', type, shop, name, amt, detail, 'บันทึก', a.name, nowText(), link, '']);
     if (shopType) { const x = sh(SH_EXP); const row = x.getLastRow() + 1; x.getRange(row, 1, 1, X_LINK).setValues([[day, shop, xType, name, amt, (BANK_EXTRA[type] ? type + ': ' : '') + detail + ' [#' + id + ']', a.name, link]]); x.getRange(row, X_FROM).setValue(BANK_FROM); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd'); }
-    if (type === 'เบิกช่าง') pushBarber(name, '📝 บันทึกเบิกล่วงหน้า ' + money(amt) + ' บาท (' + ymd(day) + ') จะหักจากค่าแรงสิ้นเดือน');
+    if (type === 'เบิกช่าง') pushBarber(name, '📝 บันทึกเบิกล่วงหน้า ' + money(amt) + ' บาท (' + ymd(day) + ') ' + ((barberByName(name) || {}).daily ? 'จะหักจากค่าแรงรายวัน วันละ ' + ADV_PER_DAY + ' · ที่เหลือหักสิ้นเดือน' : 'จะหักจากค่าแรงสิ้นเดือน'));
     return { ok: true, msg: 'บันทึก #' + id + ' ' + type + ' ' + money(amt) + ' บาท', data: bankData() };
   } finally { lock.releaseLock(); }
 }
