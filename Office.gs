@@ -72,7 +72,13 @@ function startRow(s, name, last) {
   if (c) try { c.put(key, String(r), 21600); } catch (e) {}
   return r;
 }
-function dailyRows(filter) { return memoRead('m:daily', () => rowsOf(SH_DAILY, D_BY).map(r => ({ row: r.__row, d: dateKey(r[0]), shop: String(r[D_SHOP - 1]).trim(), name: String(r[D_NAME - 1]).trim(), heads: num(r[D_HEADS - 1]), sales: num(r[D_SALES - 1]), cash: num(r[D_CASH - 1]), transfer: num(r[D_TRANSFER - 1]), calc: num(r[D_CALC - 1]), over: r[D_OVER - 1] === '' ? '' : num(r[D_OVER - 1]), paid: num(r[D_PAID - 1]), note: String(r[D_NOTE - 1] || ''), by: String(r[D_BY - 1] || '') }))).filter(x => x.d >= START_DATE && (!filter || filter(x))); }
+function dailyRows(filter) { return memoRead('m:daily', () => rowsOf(SH_DAILY, D_TIP).map(r => ({ row: r.__row, d: dateKey(r[0]), shop: String(r[D_SHOP - 1]).trim(), name: String(r[D_NAME - 1]).trim(), heads: num(r[D_HEADS - 1]), sales: num(r[D_SALES - 1]), cash: num(r[D_CASH - 1]), transfer: num(r[D_TRANSFER - 1]), calc: num(r[D_CALC - 1]), over: r[D_OVER - 1] === '' ? '' : num(r[D_OVER - 1]), paid: num(r[D_PAID - 1]), note: String(r[D_NOTE - 1] || ''), by: String(r[D_BY - 1] || ''), tip: r[D_TIP - 1] === '' || r[D_TIP - 1] == null ? null : num(r[D_TIP - 1]) }))).filter(x => x.d >= START_DATE && (!filter || filter(x))); }
+/** ทิปโอน: ลูกค้าโอนรวมทิปมา ช่างหยิบเงินสดในลิ้นชักคืน — บันทึก 2 ทางแล้วเทียบกัน
+ *  (1) ช่างกดเมนู หยิบเงินสด › ทิป → รายจ่าย ทิปช่าง จ่ายจากเงินสดร้าน (หักเงินสดลิ้นชัก) = tipTaken
+ *  (2) ผู้จัดการกรอก ทิปโอน ตอนปิดวัน → ยอดรายวัน คอลัมน์ Q (หักออกจากยอดตัด: ยอดขาย = เงินสด + โอนตามสลิป − ทิป · คอลัมน์ โอน เก็บยอดหลังหักทิป)
+ *  แถวเก่าที่ Q ว่าง ใช้ยอดที่ช่างกดแทน */
+function tipTaken() { const m = {}; expenseRows().forEach(x => { if (x.type === 'ทิปช่าง') { const k = x.d + '|' + x.shop + '|' + x.name; m[k] = (m[k] || 0) + x.amt; } }); return m; }
+function tipOf(r, m) { return r.tip != null ? r.tip : (m[r.d + '|' + r.shop + '|' + r.name] || 0); }
 function expenseRows(ymStr) { return memoRead('m:exp', () => rowsOf(SH_EXP, X_FROM).map(r => ({ row: r.__row, d: dateKey(r[0]), shop: String(r[X_SHOP - 1]).trim(), type: String(r[X_TYPE - 1]).trim(), name: String(r[X_NAME - 1] || '').trim(), amt: num(r[X_AMT - 1]), detail: String(r[X_DETAIL - 1] || ''), by: String(r[X_BY - 1] || ''), link: String(r[X_LINK - 1] || ''), from: String(r[X_FROM - 1] || '') }))).filter(x => x.d >= START_DATE && (!ymStr || x.d.slice(0, 7) === ymStr)); }
 function cashRows(ymStr) { return memoRead('m:cash', () => rowsOf(SH_CASH, C_LINK).map(r => ({ row: r.__row, d: dateKey(r[0]), shop: String(r[C_SHOP - 1]).trim(), method: String(r[C_METHOD - 1]), amt: num(r[C_AMT - 1]), who: String(r[C_WHO - 1] || ''), by: String(r[C_BY - 1] || ''), link: String(r[C_LINK - 1] || '') }))).filter(x => x.d >= START_DATE && (!ymStr || x.d.slice(0, 7) === ymStr)); }
 function gpsDist(v) { const m = /\((\d+) ม\.\)/.exec(String(v || '')); return m ? +m[1] : (String(v || '').trim() ? null : ''); }
@@ -114,10 +120,12 @@ function alertList(day) {
   if (y >= START_DATE) { const d = dailyRows(r => r.d === y), t = timeRows(r => r.d === y && !!r.tin); const miss = S.filter(s => t.some(r => r.shop === s) && !d.some(r => r.shop === s)); if (miss.length) out.push({ t: '✏️ ยังไม่กรอกยอด ' + y.slice(5) + ': ' + miss.join(', '), go: 'daily', b: 'กรอก' }); }
   // 2) ลารออนุมัติ
   try { const w = leaveRows(r => r.d >= today && !r.approved); const names = []; w.forEach(r => { if (!names.includes(r.name)) names.push(r.name); }); if (names.length) out.push({ t: '⏳ ลารออนุมัติ: ' + names.join(', '), go: 'lv', b: 'ดู' }); } catch (e) {}
-  // 3) โอนที่กรอกไว้ไม่ตรงสลิป (7 วันล่าสุด)
-  try { const from = ymd(new Date(todayBkk().getTime() - 7 * 86400000)); const d = dailyRows(r => r.d >= from && r.d < today && r.transfer > 0); const sl = slipRows(x => x.d >= from && slipCounted(x) && x.amount != null); const tips = expenseRows().filter(x => x.d >= from && x.type === 'ทิปช่าง');
-    const bad = d.filter(r => { const s = sl.filter(x => x.d === r.d && x.shop === r.shop && x.name === r.name).reduce((a, x) => a + num(x.amount), 0); const tp = tips.filter(x => x.d === r.d && x.name === r.name).reduce((a, x) => a + x.amt, 0); return s !== r.transfer + tp; });
-    if (bad.length) out.push({ t: '🧾 สลิปไม่ตรงยอดโอน ' + bad.length + ' รายการ (' + bad.slice(0, 3).map(r => r.name + ' ' + r.d.slice(5)).join(', ') + (bad.length > 3 ? ' …' : '') + ')', go: 'daily', b: 'ดู' }); } catch (e) {}
+  // 3) โอนที่กรอกไว้ไม่ตรงสลิป + ทิปโอนไม่ตรงกับที่ช่างกดหยิบ (7 วันล่าสุด)
+  try { const from = ymd(new Date(todayBkk().getTime() - 7 * 86400000)); const tk = tipTaken(); const all = dailyRows(r => r.d >= from && r.d < today); const sl = slipRows(x => x.d >= from && slipCounted(x) && x.amount != null);
+    const bad = all.filter(r => r.transfer > 0 || tipOf(r, tk) > 0).filter(r => { const s = sl.filter(x => x.d === r.d && x.shop === r.shop && x.name === r.name).reduce((a, x) => a + num(x.amount), 0); return s !== r.transfer + tipOf(r, tk); });
+    if (bad.length) out.push({ t: '🧾 สลิปไม่ตรงยอดโอน ' + bad.length + ' รายการ (' + bad.slice(0, 3).map(r => r.name + ' ' + r.d.slice(5)).join(', ') + (bad.length > 3 ? ' …' : '') + ')', go: 'daily', b: 'ดู' });
+    const badTip = all.filter(r => r.tip != null && r.tip !== (tk[r.d + '|' + r.shop + '|' + r.name] || 0));
+    if (badTip.length) out.push({ t: '💵 ทิปโอนไม่ตรงกับที่ช่างกดหยิบ ' + badTip.length + ' รายการ (' + badTip.slice(0, 3).map(r => r.name + ' ' + r.d.slice(5)).join(', ') + (badTip.length > 3 ? ' …' : '') + ')', go: 'daily', b: 'ดู' }); } catch (e) {}
   // 4) ช่างลืมกดเลิกงาน (เมื่อวาน)
   const noOut = timeRows(r => r.d === y && !!r.tin && !r.tout).map(r => r.name); if (noOut.length) out.push({ t: '🕗 ไม่ได้กดเลิกงาน ' + y.slice(5) + ': ' + noOut.join(', ') });
   return out;
@@ -172,7 +180,7 @@ function dailyGet(dateStr, shop) {
   const punched = timeRows(r => r.d === day && r.shop === shop && !!r.tin).map(r => r.name); // ไม่นับแถว ลา
   const names = []; punched.concat(ex.map(r => r.name)).forEach(n => { if (!names.includes(n)) names.push(n); });
   const others = barbers(false).map(b => b.name).filter(n => !names.includes(n));
-  const rows = names.map(n => { const r = ex.find(e => e.name === n); const b = barberByName(n); return { name: n, main: b && b.shop === shop, punched: punched.includes(n), heads: r ? r.heads : '', sales: r ? r.sales : '', cash: r ? r.cash : '', transfer: r ? r.transfer : '', calc: r ? r.calc : '', over: r ? r.over : '', paid: r ? r.paid : '', note: r ? r.note : '', exists: !!r }; });
+  const rows = names.map(n => { const r = ex.find(e => e.name === n); const b = barberByName(n); return { name: n, main: b && b.shop === shop, punched: punched.includes(n), heads: r ? r.heads : '', sales: r ? r.sales : '', cash: r ? r.cash : '', transfer: r ? r.transfer : '', tip: r ? r.tip : null, calc: r ? r.calc : '', over: r ? r.over : '', paid: r ? r.paid : '', note: r ? r.note : '', exists: !!r }; });
   rows.sort((a, b) => (b.main - a.main) || (b.punched - a.punched));
   const sl = slipRows(x => x.d === day && x.shop === shop && slipCounted(x)), bk = slipRows(x => x.d === day && x.shop === shop && x.note === 'สมุด'), tips = expenseRows().filter(x => x.d === day && x.shop === shop && x.type === 'ทิปช่าง');
   rows.forEach(r => { const m = sl.filter(x => x.name === r.name); r.slips = m.map(x => ({ row: x.row, amount: x.amount, read: x.read, link: x.link, at: x.at, note: x.note })); r.tips = tips.filter(x => x.name === r.name).reduce((a, x) => a + x.amt, 0); });
@@ -182,34 +190,21 @@ function dailySave(a, p) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     const day = parseYmd(p.date); if (!day) return { ok: false, msg: 'วันที่ไม่ถูกต้อง' }; const shop = clean(p.shop, 20); if (!shops().find(s => s.name === shop)) return { ok: false, msg: 'ไม่พบร้าน' };
-    const ex = dailyRows(r => r.d === p.date && r.shop === shop); const s = sh(SH_DAILY); let n = 0, deleted = 0; const warns = [];
+    const ex = dailyRows(r => r.d === p.date && r.shop === shop); const s = sh(SH_DAILY); let n = 0, deleted = 0;
+    if (s.getRange(1, D_TIP).getValue() === '') s.getRange(1, D_TIP).setValue('ทิปโอน');
     (p.rows || []).forEach(r => {
       const name = clean(r.name, 30); if (!name) return;
       const heads = r.heads === '' ? '' : num(r.heads), cash = r.cash === '' ? '' : num(r.cash), tr = r.transfer === '' ? '' : num(r.transfer); let sales = r.sales === '' ? '' : num(r.sales); if ((sales === '' || sales === 0) && (cash !== '' || tr !== '')) sales = num(cash) + num(tr); const over = r.over === '' || r.over == null ? '' : num(r.over);
       const cur = ex.find(e => e.name === name);
-      if (r.tip !== undefined) { const e = tipSync(day, shop, name, r.tip, a.name); if (e) warns.push(e); } // ทิปที่ลูกค้าโอนรวมมา → รายจ่าย ทิปช่าง จ่ายจากเงินสดร้าน (หักลิ้นชัก)
-      if (heads === '' && sales === '' && cash === '' && tr === '') { if (cur && r.remove) { [[1, 7], [D_OVER, 1], [D_NOTE, 1], [D_BY, 1]].forEach(([c, w]) => s.getRange(cur.row, c, 1, w).clearContent()); deleted++; } return; } // ไม่แตะคอลัมน์สูตร (H J L N O P)
+      const tip = r.tip === '' || r.tip == null ? 0 : Math.max(0, Math.round(num(r.tip)));
+      if (heads === '' && sales === '' && cash === '' && tr === '') { if (cur && r.remove) { [[1, 7], [D_OVER, 1], [D_NOTE, 1], [D_BY, 1], [D_TIP, 1]].forEach(([c, w]) => s.getRange(cur.row, c, 1, w).clearContent()); deleted++; } return; } // ไม่แตะคอลัมน์สูตร (H J L N O P)
       const vals = [[day, shop, name, heads, sales, cash, tr]]; const row = cur ? cur.row : s.getLastRow() + 1;
-      s.getRange(row, 1, 1, 7).setValues(vals); s.getRange(row, D_OVER).setValue(over); s.getRange(row, D_NOTE).setValue(clean(r.note, 120)); s.getRange(row, D_BY).setValue(a.name); s.getRange(row, D_DATE).setNumberFormat('yyyy-mm-dd'); n++;
+      s.getRange(row, 1, 1, 7).setValues(vals); s.getRange(row, D_OVER).setValue(over); s.getRange(row, D_NOTE).setValue(clean(r.note, 120)); s.getRange(row, D_BY).setValue(a.name); s.getRange(row, D_DATE).setNumberFormat('yyyy-mm-dd'); if (r.tip !== undefined) s.getRange(row, D_TIP).setValue(tip).setNumberFormat('#,##0'); n++;
     });
     SpreadsheetApp.flush();
     clearMemo();
-    return { ok: true, msg: 'บันทึก ' + n + ' รายการ' + (deleted ? ' ลบ ' + deleted : '') + (warns.length ? ' · ⚠ ' + warns.join(' · ') : ''), data: dailyGet(p.date, shop) };
+    return { ok: true, msg: 'บันทึก ' + n + ' รายการ' + (deleted ? ' ลบ ' + deleted : ''), data: dailyGet(p.date, shop) };
   } finally { lock.releaseLock(); }
-}
-/** ทิปโอน (ลูกค้าโอนรวมมากับค่าบริการ ช่างหยิบเงินสดในลิ้นชักคืน) — ผู้จัดการกรอกยอดรวมต่อช่าง/วัน ในหน้า กรอกยอด
- *  เก็บเป็นรายจ่ายประเภท ทิปช่าง จ่ายจาก เงินสดร้าน 1 แถว (รายละเอียด = TIP_TAG) → เงินสดลิ้นชักควรมีลดลงเท่าทิป · ไม่เข้าค่าแรง/กำไร
- *  ถ้ามีแถวที่ช่างเคยกดเอง (แบบเก่า) จะนับรวม แล้วปรับเฉพาะแถวของผู้จัดการให้ยอดรวม = ที่กรอก */
-const TIP_TAG = 'ทิปลูกค้าโอน (ผู้จัดการกรอก)';
-function tipSync(day, shop, name, tip, by) {
-  const d = ymd(day); const all = expenseRows().filter(x => x.d === d && x.shop === shop && x.name === name && x.type === 'ทิปช่าง');
-  const mine = all.find(x => x.detail === TIP_TAG); const other = all.filter(x => x !== mine).reduce((a, x) => a + x.amt, 0);
-  const want = Math.max(0, Math.round(num(String(tip == null ? '' : tip).replace(/,/g, '')))) - other;
-  if (want < 0) return name + ': ช่างกดทิปเองไว้ ' + money(other) + ' (ลดจากหน้านี้ไม่ได้ — แก้ที่แผ่น รายจ่าย)';
-  const x = sh(SH_EXP);
-  if (mine) { if (want === mine.amt) return ''; if (want === 0) { x.getRange(mine.row, 1, 1, X_LINK).clearContent(); x.getRange(mine.row, X_FROM).clearContent(); } else x.getRange(mine.row, X_AMT).setValue(want); return ''; }
-  if (want > 0) { const row = x.getLastRow() + 1; x.getRange(row, 1, 1, X_LINK).setValues([[day, shop, 'ทิปช่าง', name, want, TIP_TAG, by, '']]); x.getRange(row, X_FROM).setValue(CASH_FROM); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd'); }
-  return '';
 }
 
 /* ---------- รายจ่าย ---------- */
@@ -361,11 +356,9 @@ function bankData() {
   const pays = dailyPayRows().filter(x => x.paidOn >= from);
   const rows = bankRows(); const live = rows.filter(x => x.status !== 'ยกเลิก' && x.d >= from);
   const outs = live.filter(x => x.kind === 'ออก'), tops = live.filter(x => x.kind === 'เติม'), acts = live.filter(x => x.kind === 'เข้าจริง');
-  const tr = dailyRows(r => r.shop === c.shop && r.d >= from && r.transfer > 0);
-  const tips = expenseRows().filter(x => x.shop === c.shop && x.d >= from && x.type === 'ทิปช่าง'); // ทิปที่ลูกค้าโอนรวมมา — เงินเข้าบัญชีจริง = โอน + ทิป
+  const tk = tipTaken(); const tr = dailyRows(r => r.shop === c.shop && r.d >= from && (r.transfer > 0 || tipOf(r, tk) > 0)); // เงินเข้าบัญชีจริง = โอน (หลังหักทิป) + ทิปโอน
   const days = {}; const day = k => days[k] = days[k] || { d: k, in: 0, tip: 0, slip: 0, nIn: 0, pond: 0, out: 0, top: 0, act: null };
-  tr.forEach(r => { day(r.d).in += r.transfer; });
-  tips.forEach(x => { const o = day(x.d); o.in += x.amt; o.tip += x.amt; });
+  tr.forEach(r => { const o = day(r.d), t = tipOf(r, tk); o.in += r.transfer + t; o.tip += t; });
   slips.forEach(x => { const o = day(x.d); o.slip += x.amount; o.nIn++; });
   pays.forEach(x => { day(x.paidOn).pond += x.amt - x.ded; }); // โอนจริง = ค่าแรง − หักเบิก
   outs.forEach(x => { day(x.d).out += x.amt; });

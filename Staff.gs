@@ -75,7 +75,6 @@ const TAKE_TYPE = { 'รีวิว': 'รีวิว', 'ขาย': 'ขา�
 function cashTake(tok, p) {
   const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา กรุณากดเมนูในไลน์ใหม่', rebind: true };
   const reason = clean(p.reason, 60); const key = Object.keys(TAKE_TYPE).find(k => reason.indexOf(k) === 0); if (!key) return { ok: false, msg: 'เลือกเหตุผลก่อน' };
-  if (key === 'ทิป') return { ok: false, msg: 'ทิปลูกค้าโอน: ผู้จัดการกรอกให้ตอนปิดวัน — หยิบเงินสดจากลิ้นชักได้เลย ไม่ต้องกดเมนูนี้' };
   const type = TAKE_TYPE[key]; const fixed = /\((\d+)\)/.exec(reason); let amt = fixed ? num(fixed[1]) : num(p.amount);
   if (!amt || amt <= 0) return { ok: false, msg: 'ใส่จำนวนเงิน' }; if (amt > 2000) return { ok: false, msg: 'เกิน 2,000 บาท ให้แจ้งปิ๊กบันทึกแทน' };
   const detail = clean(p.detail, 120); if (type === 'ของใช้' && !detail) return { ok: false, msg: 'ระบุว่าซื้ออะไร' };

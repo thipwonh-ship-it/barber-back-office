@@ -27,7 +27,7 @@ const CELL_COLLECTOR = 'B71', CELL_ADMIN_PIN = 'B73';
 // ลงเวลา: A วันที่ B ช่าง C ร้าน D กะ E เข้า F ออก G สาย H สถานะ I หมายเหตุ J gpsเข้า K gpsออก L เดือน(สูตร)
 const T_DATE = 1, T_NAME = 2, T_SHOP = 3, T_SHIFT = 4, T_IN = 5, T_OUT = 6, T_LATE = 7, T_STATUS = 8, T_NOTE = 9, T_GPSIN = 10, T_GPSOUT = 11;
 // ยอดรายวัน: A วันที่ B ร้าน C ช่าง D หัว E ยอด F เงินสด G โอน H คำนวณ(สูตร) I แก้ J จ่าย(สูตร) K หมายเหตุ L เดือน(สูตร) M ผู้บันทึก
-const D_DATE = 1, D_SHOP = 2, D_NAME = 3, D_HEADS = 4, D_SALES = 5, D_CASH = 6, D_TRANSFER = 7, D_CALC = 8, D_OVER = 9, D_PAID = 10, D_NOTE = 11, D_MONTH = 12, D_BY = 13;
+const D_DATE = 1, D_SHOP = 2, D_NAME = 3, D_HEADS = 4, D_SALES = 5, D_CASH = 6, D_TRANSFER = 7, D_CALC = 8, D_OVER = 9, D_PAID = 10, D_NOTE = 11, D_MONTH = 12, D_BY = 13, D_TIP = 17; // Q = ทิปโอน ที่ผู้จัดการกรอก (N O P = สูตร)
 // รายจ่าย: A วันที่ B ร้าน C ประเภท D ช่าง E จำนวน F รายละเอียด G ผู้บันทึก H ลิงก์สลิป I เดือน(สูตร) J key(สูตร) K จ่ายจาก
 const X_DATE = 1, X_SHOP = 2, X_TYPE = 3, X_NAME = 4, X_AMT = 5, X_DETAIL = 6, X_BY = 7, X_LINK = 8, X_FROM = 11;
 // เงินสด: A วันที่ B ร้าน C วิธี D จำนวน E ผู้เก็บ F ผู้บันทึก G ลิงก์สลิป H เดือน(สูตร)
@@ -86,7 +86,7 @@ function tStr(v) {
 }
 function expenseTypes() { return sh(SH_SET).getRange('A60:A70').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
 function cashMethods() { return sh(SH_SET).getRange('D60:D61').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
-function takeReasons() { return sh(SH_SET).getRange('G60:G66').getValues().map(r => String(r[0]).trim()).filter(r => r && r.indexOf('ทิป') !== 0); } // ทิปลูกค้าโอน: ผู้จัดการกรอกตอนปิดวัน (หน้า กรอกยอด) — ไม่ให้ช่างกดเอง กันลงซ้ำ
+function takeReasons() { return sh(SH_SET).getRange('G60:G66').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
 function defaultCollector() { return String(sh(SH_SET).getRange(CELL_COLLECTOR).getValue() || 'ดีน').trim(); }
 function adminPin() { return String(sh(SH_SET).getRange(CELL_ADMIN_PIN).getValue() || '').trim(); }
 function targets(ymStr) {
