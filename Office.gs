@@ -442,15 +442,16 @@ function bankOpen(p) {
 }
 
 /* ---------- วงเงินสำรอง (owner) ---------- */
-/** owner เริ่ม/แก้วงเงินสำรอง: วงเงิน X ณ เช้าวันที่ D (= วันแรกที่เงินโอนลูกค้าเข้าบัญชี owner) · amount ว่าง = กลับไปแบบเดิม */
+/** owner เริ่ม/แก้วงเงินสำรอง: วงเงิน X (B78) · ยอดตั้งต้น open (B76) ณ เช้าวันที่ D (B77 = วันแรกที่เงินโอนลูกค้าเข้าบัญชี owner) · amount ว่าง = กลับไปแบบเดิม */
 function bankFloat(p) {
   bankCfg(); const s = sh(SH_SET);
   if (p.amount === '' || p.amount == null) { s.getRange('B78').clearContent(); clearMemo(); return { ok: true, msg: 'ปิดวงเงินสำรอง (กลับไปแบบบัญชีผู้จัดการ)', data: bankData() }; }
   const amt = num(String(p.amount).replace(/,/g, '')); const d = parseYmd(p.date);
   if (!(amt > 0)) return { ok: false, msg: 'ใส่วงเงิน' }; if (!d) return { ok: false, msg: 'วันที่ไม่ถูกต้อง (ปปปป-ดด-วว)' };
-  s.getRange('A78').setValue('วงเงินสำรองผู้จัดการ (เว้นว่าง = ยังไม่ใช้)'); s.getRange('B76').setValue(amt); s.getRange('B77').setValue(d).setNumberFormat('yyyy-mm-dd'); s.getRange('B78').setValue(amt);
+  const open = p.open === '' || p.open == null ? amt : num(String(p.open).replace(/,/g, '')); if (!(open >= 0)) return { ok: false, msg: 'ยอดในบัญชีผู้จัดการไม่ถูกต้อง' }; // ยอดตั้งต้น = เงินที่อยู่ในบัญชีผู้จัดการ ณ เช้าวันเริ่ม (ไม่จำเป็นต้องเท่าวงเงิน)
+  s.getRange('A78').setValue('วงเงินสำรองผู้จัดการ (เว้นว่าง = ยังไม่ใช้)'); s.getRange('B76').setValue(open); s.getRange('B77').setValue(d).setNumberFormat('yyyy-mm-dd'); s.getRange('B78').setValue(amt);
   clearMemo();
-  return { ok: true, msg: 'วงเงินสำรอง ' + money(amt) + ' บาท เริ่มเช้า ' + ymd(d), data: bankData() };
+  return { ok: true, msg: 'วงเงินสำรอง ' + money(amt) + ' บาท · ตั้งต้น ' + money(open) + ' ณ เช้า ' + ymd(d), data: bankData() };
 }
 /** owner เติมวงเงิน (โอนให้ manager แล้ว) → ไลน์แจ้ง manager */
 function bankTopup(a, p) {
