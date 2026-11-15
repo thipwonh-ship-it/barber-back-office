@@ -86,7 +86,7 @@ function tStr(v) {
 }
 function expenseTypes() { return sh(SH_SET).getRange('A60:A70').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
 function cashMethods() { return sh(SH_SET).getRange('D60:D61').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
-function takeReasons() { return sh(SH_SET).getRange('G60:G66').getValues().map(r => String(r[0]).trim()).filter(Boolean); }
+function takeReasons() { return sh(SH_SET).getRange('G60:G66').getValues().map(r => String(r[0]).trim()).filter(r => r && r.indexOf('ทิป') !== 0); } // ทิปลูกค้าโอน: ผู้จัดการกรอกตอนปิดวัน (หน้า กรอกยอด) — ไม่ให้ช่างกดเอง กันลงซ้ำ
 function defaultCollector() { return String(sh(SH_SET).getRange(CELL_COLLECTOR).getValue() || 'ดีน').trim(); }
 function adminPin() { return String(sh(SH_SET).getRange(CELL_ADMIN_PIN).getValue() || '').trim(); }
 function targets(ymStr) {

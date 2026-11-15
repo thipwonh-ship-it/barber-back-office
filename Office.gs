@@ -182,18 +182,34 @@ function dailySave(a, p) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     const day = parseYmd(p.date); if (!day) return { ok: false, msg: 'วันที่ไม่ถูกต้อง' }; const shop = clean(p.shop, 20); if (!shops().find(s => s.name === shop)) return { ok: false, msg: 'ไม่พบร้าน' };
-    const ex = dailyRows(r => r.d === p.date && r.shop === shop); const s = sh(SH_DAILY); let n = 0, deleted = 0;
+    const ex = dailyRows(r => r.d === p.date && r.shop === shop); const s = sh(SH_DAILY); let n = 0, deleted = 0; const warns = [];
     (p.rows || []).forEach(r => {
       const name = clean(r.name, 30); if (!name) return;
       const heads = r.heads === '' ? '' : num(r.heads), cash = r.cash === '' ? '' : num(r.cash), tr = r.transfer === '' ? '' : num(r.transfer); let sales = r.sales === '' ? '' : num(r.sales); if ((sales === '' || sales === 0) && (cash !== '' || tr !== '')) sales = num(cash) + num(tr); const over = r.over === '' || r.over == null ? '' : num(r.over);
       const cur = ex.find(e => e.name === name);
+      if (r.tip !== undefined) { const e = tipSync(day, shop, name, r.tip, a.name); if (e) warns.push(e); } // ทิปที่ลูกค้าโอนรวมมา → รายจ่าย ทิปช่าง จ่ายจากเงินสดร้าน (หักลิ้นชัก)
       if (heads === '' && sales === '' && cash === '' && tr === '') { if (cur && r.remove) { [[1, 7], [D_OVER, 1], [D_NOTE, 1], [D_BY, 1]].forEach(([c, w]) => s.getRange(cur.row, c, 1, w).clearContent()); deleted++; } return; } // ไม่แตะคอลัมน์สูตร (H J L N O P)
       const vals = [[day, shop, name, heads, sales, cash, tr]]; const row = cur ? cur.row : s.getLastRow() + 1;
       s.getRange(row, 1, 1, 7).setValues(vals); s.getRange(row, D_OVER).setValue(over); s.getRange(row, D_NOTE).setValue(clean(r.note, 120)); s.getRange(row, D_BY).setValue(a.name); s.getRange(row, D_DATE).setNumberFormat('yyyy-mm-dd'); n++;
     });
     SpreadsheetApp.flush();
-    return { ok: true, msg: 'บันทึก ' + n + ' รายการ' + (deleted ? ' ลบ ' + deleted : ''), data: dailyGet(p.date, shop) };
+    clearMemo();
+    return { ok: true, msg: 'บันทึก ' + n + ' รายการ' + (deleted ? ' ลบ ' + deleted : '') + (warns.length ? ' · ⚠ ' + warns.join(' · ') : ''), data: dailyGet(p.date, shop) };
   } finally { lock.releaseLock(); }
+}
+/** ทิปโอน (ลูกค้าโอนรวมมากับค่าบริการ ช่างหยิบเงินสดในลิ้นชักคืน) — ผู้จัดการกรอกยอดรวมต่อช่าง/วัน ในหน้า กรอกยอด
+ *  เก็บเป็นรายจ่ายประเภท ทิปช่าง จ่ายจาก เงินสดร้าน 1 แถว (รายละเอียด = TIP_TAG) → เงินสดลิ้นชักควรมีลดลงเท่าทิป · ไม่เข้าค่าแรง/กำไร
+ *  ถ้ามีแถวที่ช่างเคยกดเอง (แบบเก่า) จะนับรวม แล้วปรับเฉพาะแถวของผู้จัดการให้ยอดรวม = ที่กรอก */
+const TIP_TAG = 'ทิปลูกค้าโอน (ผู้จัดการกรอก)';
+function tipSync(day, shop, name, tip, by) {
+  const d = ymd(day); const all = expenseRows().filter(x => x.d === d && x.shop === shop && x.name === name && x.type === 'ทิปช่าง');
+  const mine = all.find(x => x.detail === TIP_TAG); const other = all.filter(x => x !== mine).reduce((a, x) => a + x.amt, 0);
+  const want = Math.max(0, Math.round(num(String(tip == null ? '' : tip).replace(/,/g, '')))) - other;
+  if (want < 0) return name + ': ช่างกดทิปเองไว้ ' + money(other) + ' (ลดจากหน้านี้ไม่ได้ — แก้ที่แผ่น รายจ่าย)';
+  const x = sh(SH_EXP);
+  if (mine) { if (want === mine.amt) return ''; if (want === 0) { x.getRange(mine.row, 1, 1, X_LINK).clearContent(); x.getRange(mine.row, X_FROM).clearContent(); } else x.getRange(mine.row, X_AMT).setValue(want); return ''; }
+  if (want > 0) { const row = x.getLastRow() + 1; x.getRange(row, 1, 1, X_LINK).setValues([[day, shop, 'ทิปช่าง', name, want, TIP_TAG, by, '']]); x.getRange(row, X_FROM).setValue(CASH_FROM); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd'); }
+  return '';
 }
 
 /* ---------- รายจ่าย ---------- */
