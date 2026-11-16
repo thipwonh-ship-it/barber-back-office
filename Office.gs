@@ -194,7 +194,6 @@ function dailySave(a, p) {
     const ex = dailyRows(r => r.d === p.date && r.shop === shop); const s = sh(SH_DAILY); let n = 0, deleted = 0;
     if (s.getMaxColumns() < D_TIP) s.insertColumnsAfter(s.getMaxColumns(), D_TIP - s.getMaxColumns());
     if (s.getRange(1, D_TIP).getValue() === '') s.getRange(1, D_TIP).setValue('ทิปโอน');
-    const tk = tipTaken(); const tipWarn = []; // ทิปโอนที่ผู้จัดการกรอก ไม่ตรงกับที่ช่างกดหยิบ → บอทแจ้งช่าง (เฉพาะตอนค่าที่กรอกเปลี่ยน กันแจ้งซ้ำ)
     (p.rows || []).forEach(r => {
       const name = clean(r.name, 30); if (!name) return;
       const heads = r.heads === '' ? '' : num(r.heads), cash = r.cash === '' ? '' : num(r.cash), tr = r.transfer === '' ? '' : num(r.transfer); let sales = r.sales === '' ? '' : num(r.sales); if ((sales === '' || sales === 0) && (cash !== '' || tr !== '')) sales = num(cash) + num(tr); const over = r.over === '' || r.over == null ? '' : num(r.over);
@@ -202,12 +201,11 @@ function dailySave(a, p) {
       const tip = r.tip === '' || r.tip == null ? 0 : Math.max(0, Math.round(num(r.tip)));
       if (heads === '' && sales === '' && cash === '' && tr === '') { if (cur && r.remove) { [[1, 7], [D_OVER, 1], [D_NOTE, 1], [D_BY, 1], [D_TIP, 1]].forEach(([c, w]) => s.getRange(cur.row, c, 1, w).clearContent()); deleted++; } return; } // ไม่แตะคอลัมน์สูตร (H J L N O P)
       const vals = [[day, shop, name, heads, sales, cash, tr]]; const row = cur ? cur.row : s.getLastRow() + 1;
-      s.getRange(row, 1, 1, 7).setValues(vals); s.getRange(row, D_OVER).setValue(over); s.getRange(row, D_NOTE).setValue(clean(r.note, 120)); s.getRange(row, D_BY).setValue(a.name); s.getRange(row, D_DATE).setNumberFormat('yyyy-mm-dd'); if (r.tip !== undefined) { s.getRange(row, D_TIP).setValue(tip).setNumberFormat('#,##0'); const took = tk[p.date + '|' + shop + '|' + name] || 0; if (tip !== took && (!cur || cur.tip !== tip)) tipWarn.push({ name, tip, took }); } n++;
+      s.getRange(row, 1, 1, 7).setValues(vals); s.getRange(row, D_OVER).setValue(over); s.getRange(row, D_NOTE).setValue(clean(r.note, 120)); s.getRange(row, D_BY).setValue(a.name); s.getRange(row, D_DATE).setNumberFormat('yyyy-mm-dd'); if (r.tip !== undefined) s.getRange(row, D_TIP).setValue(tip).setNumberFormat('#,##0'); n++;
     });
     SpreadsheetApp.flush();
     clearMemo();
-    tipWarn.forEach(w => { try { pushBarber(w.name, '💵 ทิปโอน ' + p.date.slice(5) + ' (' + shop + ') ไม่ตรง\nผู้จัดการลงทิปโอน ' + money(w.tip) + ' บาท · คุณกดหยิบทิปไว้ ' + money(w.took) + ' บาท\n→ ' + (w.took < w.tip ? 'กดเมนู หยิบเงินสด › ทิปลูกค้าโอน อีก ' + money(w.tip - w.took) + ' บาท ภายในวันนี้' : 'กดเกิน ' + money(w.took - w.tip) + ' บาท แจ้งผู้จัดการ')); } catch (e) {} });
-    return { ok: true, msg: 'บันทึก ' + n + ' รายการ' + (deleted ? ' ลบ ' + deleted : '') + (tipWarn.length ? ' · แจ้งช่างเรื่องทิปไม่ตรง: ' + tipWarn.map(w => w.name).join(', ') : ''), data: dailyGet(p.date, shop) };
+    return { ok: true, msg: 'บันทึก ' + n + ' รายการ' + (deleted ? ' ลบ ' + deleted : ''), data: dailyGet(p.date, shop) };
   } finally { lock.releaseLock(); }
 }
 
