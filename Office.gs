@@ -62,7 +62,8 @@ function monthList() { const out = []; const d = todayBkk(); for (let i = 0; i <
 /* ---------- อ่านแผ่น ---------- */
 /** อ่านแผ่นตั้งแต่แถวแรกที่วันที่ ≥ START_DATE (ข้อมูลเก่าจาก Excel 1,343 แถวอยู่ด้านบน ไม่ต้องอ่าน) — อ่านคอลัมน์ A ก่อนเพื่อหาจุดเริ่ม ถูกกว่าอ่านทั้งแผ่น 16 คอลัมน์ ~10 เท่า */
 function rowsOf(name, cols) { return memoRead('rows:' + name + ':' + cols, () => { const s = sh(name); const last = s.getLastRow(); if (last < 2) return [];
-  const r0 = startRow(s, name, last); return r0 > last ? [] : s.getRange(r0, 1, last - r0 + 1, cols).getValues().map((r, k) => { r.__row = r0 + k; return r; }); }); }
+  const r0 = startRow(s, name, last); const mc = Math.min(cols, s.getMaxColumns()); /* แผ่นที่ยังไม่มีคอลัมน์ใหม่ (เช่น ยอดรายวัน Q) — อ่านเท่าที่มี แล้วเติมช่องว่าง ไม่ให้ error */
+  return r0 > last ? [] : s.getRange(r0, 1, last - r0 + 1, mc).getValues().map((r, k) => { while (r.length < cols) r.push(''); r.__row = r0 + k; return r; }); }); }
 /** แถวแรกที่วันที่ ≥ START_DATE — จำไว้ใน CacheService 6 ชม. แล้วตรวจแค่ 2 เซลล์ (แถวนั้น ≥ START และแถวก่อนหน้า < START) · ถ้าไม่ตรงค่อยสแกนคอลัมน์ A ใหม่ */
 function startRow(s, name, last) {
   const key = 'sr:' + name; let c = null; try { c = CacheService.getScriptCache(); } catch (e) {}
@@ -191,6 +192,7 @@ function dailySave(a, p) {
   try {
     const day = parseYmd(p.date); if (!day) return { ok: false, msg: 'วันที่ไม่ถูกต้อง' }; const shop = clean(p.shop, 20); if (!shops().find(s => s.name === shop)) return { ok: false, msg: 'ไม่พบร้าน' };
     const ex = dailyRows(r => r.d === p.date && r.shop === shop); const s = sh(SH_DAILY); let n = 0, deleted = 0;
+    if (s.getMaxColumns() < D_TIP) s.insertColumnsAfter(s.getMaxColumns(), D_TIP - s.getMaxColumns());
     if (s.getRange(1, D_TIP).getValue() === '') s.getRange(1, D_TIP).setValue('ทิปโอน');
     (p.rows || []).forEach(r => {
       const name = clean(r.name, 30); if (!name) return;
@@ -373,7 +375,7 @@ function bankData() {
   const out = { ok: true, shop: c.shop, from, open: c.open, balance, tot, days: list.slice().reverse().slice(0, 40), outs: byDateDesc(rows.filter(x => x.kind === 'ออก')).slice(0, 60).map(x => ({ id: x.id, d: x.d, type: x.type, shop: x.shop, name: x.name, amt: x.amt, detail: x.detail, status: x.status, by: x.by, at: x.at, link: x.link })), checks, types: expenseTypes().filter(t => t !== 'โบนัส' && t !== 'ทิปช่าง').concat(Object.keys(BANK_EXTRA), [BANK_GIVE, BANK_ADV, 'ส่งเงินให้ owner']), float: c.float, used: null, mism: [], miss: 0 };
   if (!fl) return out;
   // ---- วงเงินสำรอง ----
-  const mNow = today.slice(0, 7); const pers = t => outs.filter(x => x.type === t && x.d.slice(0, 7) === mNow).reduce((a, x) => a + x.amt, 0);
+  const mNow = today.slice(0, 7); const pers = t => rows.filter(x => x.kind === 'ออก' && x.status !== 'ยกเลิก' && x.type === t && x.d.slice(0, 7) === mNow).reduce((a, x) => a + x.amt, 0); // ทั้งเดือน (รวมก่อนวันเริ่มวงเงิน) — ใช้หักเงินเดือน manager
   out.used = balance == null ? null : c.float - balance; out.give = pers(BANK_GIVE); out.adv = pers(BANK_ADV); out.low = FLOAT_LOW;
   out.mism = list.filter(o => o.diff).slice(-7).reverse().map(o => ({ d: o.d, act: o.act, in: o.in, slip: o.slip, diff: o.diff }));
   out.miss = list.filter(o => o.d < today && o.in > 0 && o.act == null).length; // วันที่มีเงินโอนแต่ owner ยังไม่กรอกเข้าจริง
