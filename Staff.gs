@@ -195,8 +195,9 @@ function isSlipText(text, p) { return LOOKS_SLIP.test(thaiNorm(text)) && (p.amou
  * ค่าจริงอยู่ในชีตเท่านั้น — ห้ามใส่ใน repo */
 function payCfg() {
   return memoRead('paycfg', () => {
-    let v = []; try { v = sh(SH_SET).getRange('A79:D82').getDisplayValues(); } catch (e) {}
-    const shopsM = {}; v.slice(1).forEach(r => { const n = String(r[0]).trim(); if (!n) return; const f = String(r[3]).trim(); shopsM[n] = { acct: String(r[1]).replace(/\D/g, ''), tail: String(r[2]).replace(/\D/g, ''), from: /^\d{4}-\d{2}-\d{2}$/.test(f) && f > START_DATE ? f : START_DATE }; });
+    let v = [], raw = []; try { const g = sh(SH_SET).getRange('A79:D82'); v = g.getDisplayValues(); raw = g.getValues(); } catch (e) {}
+    const shopsM = {}; v.slice(1).forEach((r, i) => { const n = String(r[0]).trim(); if (!n) return; let f = ''; try { f = dateKey(raw[i + 1][3]) || ''; } catch (e) {} // D = วันที่ (เซลล์วันที่หรือข้อความ ปปปป-ดด-วว)
+      shopsM[n] = { acct: String(r[1]).replace(/\D/g, ''), tail: String(r[2]).replace(/\D/g, ''), from: /^\d{4}-\d{2}-\d{2}$/.test(f) && f > START_DATE ? f : START_DATE }; });
     return { names: v.length ? thaiNorm(v[0][1]).toLowerCase().split(/[,\/]/).map(x => x.trim()).filter(x => x.length >= 4) : [], shops: shopsM };
   });
 }
