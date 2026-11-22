@@ -118,13 +118,13 @@ function mySlipPdf(tok, ymStr) {
 
 /* ---------- สลิปโอน: ช่างส่งรูปสลิปเข้าแชท OA → เก็บ Drive + อ่านยอด (OCR ฟรีของ Google Drive) ---------- */
 const SH_SLIP = 'สลิปโอน';
-// A วันที่ B ช่าง C ร้าน D ยอดที่อ่านได้ E ยอดที่แก้ F เลขอ้างอิง G hash H ลิงก์ I เวลาส่ง J หมายเหตุ
+// A วันที่ B ช่าง C ร้าน D ยอดที่อ่านได้ E ยอดที่แก้ F เลขอ้างอิง G hash H ลิงก์ I เวลาส่ง J หมายเหตุ K ชุด L คีย์ M ผู้รับ (ok / ร้านอื่น / ไม่พบ / ว่าง = ตรวจไม่ได้)
 function slipSheet() {
-  let s = ss().getSheetByName(SH_SLIP); if (s) { if (!s.getRange('K1').getValue()) s.getRange('K1').setValue('ชุด').setFontWeight('bold'); if (!s.getRange('L1').getValue()) s.getRange('L1').setValue('คีย์ ยอด|วัน|เวลาโอน').setFontWeight('bold'); return s; }
-  s = ss().insertSheet(SH_SLIP); s.getRange('A1:L1').setValues([['วันที่', 'ช่าง', 'ร้าน', 'ยอดที่อ่านได้', 'ยอดที่แก้', 'เลขอ้างอิง', 'hash', 'ลิงก์สลิป', 'เวลาส่ง', 'หมายเหตุ', 'ชุด', 'คีย์ ยอด|วัน|เวลาโอน']]).setFontWeight('bold'); s.setFrozenRows(1); return s;
+  let s = ss().getSheetByName(SH_SLIP); if (s) { if (!s.getRange('K1').getValue()) s.getRange('K1').setValue('ชุด').setFontWeight('bold'); if (!s.getRange('L1').getValue()) s.getRange('L1').setValue('คีย์ ยอด|วัน|เวลาโอน').setFontWeight('bold'); if (s.getMaxColumns() < 13) s.insertColumnsAfter(s.getMaxColumns(), 13 - s.getMaxColumns()); if (!s.getRange('M1').getValue()) s.getRange('M1').setValue('ผู้รับ').setFontWeight('bold'); return s; }
+  s = ss().insertSheet(SH_SLIP); s.getRange('A1:M1').setValues([['วันที่', 'ช่าง', 'ร้าน', 'ยอดที่อ่านได้', 'ยอดที่แก้', 'เลขอ้างอิง', 'hash', 'ลิงก์สลิป', 'เวลาส่ง', 'หมายเหตุ', 'ชุด', 'คีย์ ยอด|วัน|เวลาโอน', 'ผู้รับ']]).setFontWeight('bold'); s.setFrozenRows(1); return s;
 }
 function slipRows(filter) {
-  return memoRead('slip', () => { const s = ss().getSheetByName(SH_SLIP); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 12).getValues(); }).map((r, i) => ({ set: String(r[10] || ''), key: String(r[11] || ''), row: i + 2, d: dateKey(r[0]), name: String(r[1]).trim(), shop: String(r[2]).trim(), read: r[3] === '' ? null : num(r[3]), fix: r[4] === '' ? null : num(r[4]), ref: String(r[5] || ''), hash: String(r[6] || ''), link: String(r[7] || ''), at: tStr(r[8]), note: String(r[9] || '') }))
+  return memoRead('slip', () => { const s = ss().getSheetByName(SH_SLIP); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, Math.min(13, s.getMaxColumns())).getValues(); }).map((r, i) => ({ set: String(r[10] || ''), key: String(r[11] || ''), payee: String(r[12] || ''), row: i + 2, d: dateKey(r[0]), name: String(r[1]).trim(), shop: String(r[2]).trim(), read: r[3] === '' ? null : num(r[3]), fix: r[4] === '' ? null : num(r[4]), ref: String(r[5] || ''), hash: String(r[6] || ''), link: String(r[7] || ''), at: tStr(r[8]), note: String(r[9] || '') }))
     .map(x => (x.amount = x.fix != null ? x.fix : x.read, x)).filter(filter || (() => true));
 }
 /** อ่านข้อความจากรูปด้วย OCR ของ Google Drive (แปลงเป็น Google Doc ชั่วคราวแล้วลบ) */
@@ -189,6 +189,39 @@ const LOOKS_SLIP = /สำเร็จ|ธรรมเนียม|อางอ�
 /** สลิป = มีคำเฉพาะของสลิปธนาคาร + (อ่านยอดได้ หรือ มีเลขอ้างอิง) — ไม่งั้นถือเป็นรูปสมุด/อื่นๆ */
 function isSlipText(text, p) { return LOOKS_SLIP.test(thaiNorm(text)) && (p.amount != null || !!p.ref); }
 
+/* ---------- บัญชีรับโอนของร้าน (ตั้งค่า!A79:D82) ----------
+ * ลูกค้าจ่ายผ่าน QR พร้อมเพย์ → สลิปแสดง "ชื่อผู้รับ + เลขพร้อมเพย์ (ปิดบางหลัก)" ไม่แสดงเลขบัญชี
+ * B79 = คำในชื่อผู้รับที่ต้องเจอบนสลิป (หลายคำคั่นด้วย , เช่น ชื่อไทย,ชื่ออังกฤษ) · แถว 80–82: A ร้าน · B เลขท้ายบัญชี (ใช้เป็นป้ายชื่อบัญชี) · C เลขท้ายพร้อมเพย์บนสลิป · D เริ่มรับโอนเข้าบัญชีนี้ (ว่าง = วันเริ่มระบบ)
+ * ค่าจริงอยู่ในชีตเท่านั้น — ห้ามใส่ใน repo */
+function payCfg() {
+  return memoRead('paycfg', () => {
+    let v = []; try { v = sh(SH_SET).getRange('A79:D82').getDisplayValues(); } catch (e) {}
+    const shopsM = {}; v.slice(1).forEach(r => { const n = String(r[0]).trim(); if (!n) return; const f = String(r[3]).trim(); shopsM[n] = { acct: String(r[1]).replace(/\D/g, ''), tail: String(r[2]).replace(/\D/g, ''), from: /^\d{4}-\d{2}-\d{2}$/.test(f) && f > START_DATE ? f : START_DATE }; });
+    return { names: v.length ? thaiNorm(v[0][1]).toLowerCase().split(/[,\/]/).map(x => x.trim()).filter(x => x.length >= 4) : [], shops: shopsM };
+  });
+}
+/** เลขท้ายปรากฏเป็น "ท้ายของเลข" ในข้อความ — ยอมให้มี - หรือเว้นวรรคคั่น (x-xxxx-xxxx1-21-8) และห้ามมีตัวเลขต่อท้าย */
+function tailRe(tail) { return new RegExp(String(tail).split('').join('[-\\s]?') + '(?!\\d)'); }
+/** ตรวจผู้รับบนสลิปของร้าน shop → 'ok' = เลขท้ายพร้อมเพย์ของร้านนี้ · 'other' = เป็นบัญชีของร้านอื่น · 'no' = ไม่พบทั้งชื่อผู้รับและเลขพร้อมเพย์ของร้าน
+ *  '' = ตรวจไม่ได้ (ยังไม่ตั้งค่า / เจอชื่อแต่ OCR อ่านเลขไม่ออก) — ไม่เตือน
+ *  ทดสอบกับ OCR สลิปจริง 21 ใบ (กสิกร, MAKE, SCB, กรุงเทพ, กรุงไทย, ttb, ออมสิน, ทรูมันนี่ ทั้งไทย/อังกฤษ):
+ *  - เลขท้าย 4 หลัก หาได้ทั้งใบ (บางใบ OCR อ่านชื่อเพี้ยนแต่เลขครบ)
+ *  - บางธนาคารปิดเลขเหลือท้าย 3 หลัก (กรุงเทพ: 3-4505-0xxxx-21-8) → ยอมรับ 3 หลักท้าย เฉพาะในข้อความ 90 ตัวอักษรหลังชื่อผู้รับ */
+function slipPayee(text, shop, cfg) {
+  const c = cfg || payCfg(); const me = c.shops[shop]; if (!c.names.length || !me || me.tail.length < 4) return '';
+  const t = thaiNorm(text).replace(/\s+/g, ' ').replace(/\d[\d,]*\.\d{2}/g, ' '), low = t.toLowerCase(); const wins = [];
+  c.names.forEach(nm => { for (let i = low.indexOf(nm); i >= 0; i = low.indexOf(nm, i + 1)) wins.push(t.slice(i, i + 90)); });
+  const hit = x => tailRe(x).test(t) || wins.some(w => tailRe(x.slice(-3)).test(w));
+  if (hit(me.tail)) return 'ok';
+  const others = []; Object.keys(c.shops).forEach(k => { const x = c.shops[k].tail; if (x.length >= 4 && x !== me.tail && !others.includes(x)) others.push(x); });
+  if (others.some(hit)) return 'other';
+  return wins.length ? '' : 'no';
+}
+const PAYEE_TXT = { ok: 'ok', other: 'ร้านอื่น', no: 'ไม่พบ', '': '' };
+/** สลิปที่ผู้รับไม่ใช่บัญชีของร้าน (ต้องให้ manager ตรวจ) */
+function slipBadPay(x) { return x.payee === 'ร้านอื่น' || x.payee === 'ไม่พบ'; }
+function payeeMsg(shop) { return 'ผู้รับไม่ใช่บัญชีร้าน' + shop + ' — ตรวจ QR ที่ให้ลูกค้าสแกน'; }
+
 /** webhook: ช่างส่งรูปเข้าแชท → เก็บรูป + อ่านยอดทันที (แต่ละรูปเป็นคนละ request จึงอ่านพร้อมกันได้)
  *  ส่ง 1 รูป → ตอบยอดของรูปนั้น
  *  ส่งหลายรูปพร้อมกัน (imageSet) → รูปที่อ่านเสร็จเป็นรูปสุดท้ายของชุด ตอบสรุปรวมครั้งเดียว (ใช้ reply ไม่เสียโควตา push) */
@@ -217,7 +250,7 @@ function slipIntake(uid, msgId, set) {
       if (r.st === 'book') return '📒 รับรูปสมุดแล้ว — ผู้จัดการจะใช้ตรวจตอนกรอกยอด\n(ถ้าเป็นสลิปแต่ระบบอ่านไม่ออก ผู้จัดการจะตรวจเอง)';
       if (r.st === 'dup') return '⚠️ สลิป ' + (r.amount != null ? money(r.amount) + ' บาท ' : '') + 'นี้' + (r.twin && r.twin !== b.name ? ' ' + r.twin + ' ส่งไปแล้ว — นับครั้งเดียว\n(ลูกค้าจ่ายรวมให้ 2 คน ผู้จัดการจะแบ่งยอดตอนกรอก)' : 'ส่งไปแล้ว — ไม่นับซ้ำ');
       const mine = slipRows(x => x.d === day && x.name === b.name && x.shop === shop && slipCounted(x)); const tot = mine.reduce((a, x) => a + (x.amount || 0), 0);
-      return (r.amount == null ? '📸 รับสลิปแล้ว แต่อ่านยอดไม่ได้ — ผู้จัดการจะตรวจเอง' : '✅ รับสลิป ' + money(r.amount) + ' บาท') + '\n' + shop + ' · ' + day + '\nวันนี้ส่งแล้ว ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท' + (r.note ? '\n⚠️ ' + r.note + ' — ผู้จัดการจะตรวจ' : '');
+      return (r.amount == null ? '📸 รับสลิปแล้ว แต่อ่านยอดไม่ได้ — ผู้จัดการจะตรวจเอง' : '✅ รับสลิป ' + money(r.amount) + ' บาท') + '\n' + shop + ' · ' + day + '\nวันนี้ส่งแล้ว ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท' + (r.note ? '\n⚠️ ' + r.note + ' — ผู้จัดการจะตรวจ' : '') + (r.badPay ? '\n⚠️ ' + payeeMsg(shop) : '');
     }
   } catch (e) { if (!setId) throw e; r = { st: 'err' }; }
   // ---- ชุดหลายรูป: นับว่าเสร็จกี่รูปแล้ว รูปสุดท้ายเป็นคนตอบสรุป ----
@@ -235,13 +268,14 @@ function slipSetSummary(name, setId, total, extra) {
   const rs = slipRows(x => x.set === setId), day = ymd(todayBkk());
   const ok = rs.filter(x => slipCounted(x) && x.note !== SLIP_WAIT), amts = ok.filter(x => x.amount != null).map(x => x.amount), bad = ok.filter(x => x.amount == null);
   const dup = rs.filter(x => /^ซ้ำ/.test(x.note)).length + (extra.dupimg || 0), book = rs.filter(x => x.note === 'สมุด').length, old = ok.filter(x => /ไม่ใช่วันนี้/.test(x.note)).length;
-  const shop = rs.length ? rs[0].shop : '';
+  const shop = rs.length ? rs[0].shop : ''; const wrong = ok.filter(slipBadPay);
   const mine = slipRows(x => x.d === day && x.name === name && x.shop === shop && slipCounted(x)), tot = mine.reduce((a, x) => a + (x.amount || 0), 0), sum = amts.reduce((a, v) => a + v, 0);
   return '🧾 รับสลิปทั้งสิ้น ' + ok.length + ' ใบ' + (shop ? ' · ' + shop : '') +
     (amts.length ? '\nยอด: ' + amts.map(money).join(', ') + '\nรวม ' + money(sum) + ' บาท' : '') +
     (bad.length ? '\n📸 อ่านยอดไม่ได้ ' + bad.length + ' ใบ — ผู้จัดการจะตรวจ' : '') +
     (old ? '\n⚠️ สลิปไม่ใช่วันนี้ ' + old + ' ใบ' : '') +
     (dup ? '\n⚠️ ส่งซ้ำ ' + dup + ' ใบ (ไม่นับ)' : '') +
+    (wrong.length ? '\n⚠️ ' + wrong.length + ' ใบ (' + wrong.map(x => x.amount == null ? '?' : money(x.amount)).join(', ') + ') ' + payeeMsg(shop) : '') +
     (book ? '\n📒 รูปสมุด ' + book + ' รูป' : '') +
     (extra.err ? '\n⚠️ บันทึกไม่สำเร็จ ' + extra.err + ' รูป — ส่งรูปนั้นใหม่อีกครั้ง' : '') +
     (mine.length > ok.length ? '\nทั้งวันนี้ ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท' : '');
@@ -265,8 +299,9 @@ function slipRead(row, blob) {
     if (twinK) { s.getRange(row, 4).setValue(p.amount); s.getRange(row, 6).setValue(p.ref); s.getRange(row, 10).setValue('ซ้ำ (ยอด+เวลาโอนตรงกับสลิปของ ' + twinK.name + ' แถว ' + twinK.row + ' — ลูกค้าจ่ายรวม/ส่งซ้ำ นับครั้งเดียว)'); return { st: 'dup', ref: '', amount: p.amount, twin: twinK.name }; }
     const td = todayBkk(); const old = p.date && !(p.date.d === td.getDate() && p.date.m === td.getMonth() + 1);
     const note = old ? 'สลิปลงวันที่ ' + p.date.d + '/' + p.date.m + ' ไม่ใช่วันนี้' : '';
-    s.getRange(row, 4).setValue(p.amount == null ? '' : p.amount); s.getRange(row, 6).setValue(p.ref); s.getRange(row, 10).setValue(note);
-    return { st: 'ok', amount: p.amount, ref: p.ref, note };
+    let pay = ''; try { pay = PAYEE_TXT[slipPayee(text, shopR)] || ''; } catch (e) {}
+    s.getRange(row, 4).setValue(p.amount == null ? '' : p.amount); s.getRange(row, 6).setValue(p.ref); s.getRange(row, 10).setValue(note); s.getRange(row, 13).setValue(pay);
+    return { st: 'ok', amount: p.amount, ref: p.ref, note, badPay: pay === 'ร้านอื่น' || pay === 'ไม่พบ' };
   } finally { lock.releaseLock(); }
 }
 /** (รันเองใน editor) ใส่คีย์ ยอด|วัน|เวลา ให้สลิปเก่าตั้งแต่ START_DATE ที่ยังไม่มีคีย์ แล้ว log คู่ที่น่าจะซ้ำ (ไม่แก้หมายเหตุเอง) */
@@ -282,6 +317,14 @@ function slipKeyBackfill() {
   return pairs;
 }
 /** (รันเองใน editor ได้) อ่านสลิปที่ค้างสถานะ 'รออ่าน' ทั้งหมด */
+/** (รันเองใน editor) ตรวจผู้รับของสลิปเก่าตั้งแต่วันที่ from ที่คอลัมน์ M ยังว่าง — หยุดเองเมื่อใกล้ครบ 5 นาที รันซ้ำได้ */
+function slipPayeeBackfill(from) {
+  const t0 = Date.now(); const s = slipSheet(); const cfg = payCfg(); let n = 0; const cnt = {};
+  const rs = slipRows(x => x.d >= (from || START_DATE) && !x.payee && slipCounted(x) && x.note !== SLIP_WAIT && x.amount != null);
+  for (const x of rs) { if (Date.now() - t0 > 290000) break;
+    try { const id = (x.link.match(/[-\w]{25,}/) || [])[0]; const r = slipPayee(ocrText(DriveApp.getFileById(id).getBlob().setName('slip.jpg')), x.shop, cfg); const v = PAYEE_TXT[r] || '?'; s.getRange(x.row, 13).setValue(v); cnt[v] = (cnt[v] || 0) + 1; n++; if (r !== 'ok') Logger.log(x.row + ' ' + x.d + ' ' + x.shop + ' ' + x.name + ' ' + x.amount + ' → ' + (r || 'ตรวจไม่ได้')); } catch (e) { Logger.log(x.row + ' ' + e.message); } }
+  Logger.log('ตรวจ ' + n + ' / ' + rs.length + ' ใบ ' + JSON.stringify(cnt));
+}
 function slipRetry() { slipRows(x => x.note === SLIP_WAIT).forEach(x => { try { slipRead(x.row); } catch (e) { Logger.log(x.row + ' ' + e.message); } }); }
 
 /* ---------- สรุปร้าน (ข้อความที่ช่างพิมพ์ส่ง เช่น Kraft: นับแบงก์ + จำนวนลูกค้า) ---------- */

@@ -15,6 +15,7 @@ function officeApi(a, p) {
     case 'pond_paid': return pondPaid(a, p);
     case 'pond_unpay': return pondUnpay(a, p);
     case 'slip_fix': { const s = ss().getSheetByName(SH_SLIP); const row = num(p.row); if (!s || row < 2) return { ok: false, msg: 'ไม่พบสลิป' }; s.getRange(row, 5).setValue(p.amount === '' ? '' : num(p.amount)); s.getRange(row, 10).setValue('แก้โดย ' + a.name + ' ' + nowText()); return { ok: true, msg: 'แก้ยอดสลิปแล้ว', data: dailyGet(p.date, p.shop) }; }
+    case 'slip_payok': { const s = ss().getSheetByName(SH_SLIP); const row = num(p.row); if (!s || row < 2) return { ok: false, msg: 'ไม่พบสลิป' }; s.getRange(row, 13).setValue('ok (ตรวจโดย ' + a.name + ' ' + nowText() + ')'); clearMemo(); return { ok: true, msg: 'บันทึกแล้ว: ผู้รับถูกต้อง', data: dailyGet(p.date, p.shop) }; }
     case 'payroll': return payrollData(p.ym);
     case 'target_set': { if (!owner) return deny(); if (!(num(p.val) > 0)) return { ok: false, msg: 'ใส่จำนวนหัวเป็นตัวเลข' }; const ok = setTarget(p.ym, p.shop, p.val); return ok ? { ok: true, msg: 'ตั้งเป้า ' + p.shop + ' ' + p.ym + ' = ' + num(p.val) + ' หัว' } : { ok: false, msg: 'ไม่พบเดือน ' + p.ym + ' หรือร้าน ' + p.shop + ' ในแผ่น ตั้งค่า (A33:D57)' }; }
     case 'close_month': if (!owner) return deny(); return closeMonth(p.ym);
@@ -119,7 +120,7 @@ function todayData(dateStr) {
   const offToday = act.filter(b => ex[b.name] && ex[b.name].off.includes(wd) && !punched.includes(b.name)).map(b => b.name);
   const ymStr = day.slice(0, 7); const tg = targets(ymStr); const md = dailyRows(r => r.d.slice(0, 7) === ymStr);
   const mtd = S.map(s => ({ shop: s, heads: md.filter(r => r.shop === s).reduce((a, r) => a + r.heads, 0), target: tg[s] || 0, sales: md.filter(r => r.shop === s).reduce((a, r) => a + r.sales, 0) }));
-  return { ok: true, date: day, byShop, notYet, offToday, mtd, alerts: alertList(day), cash: cashBalance(), pond: pondData().today, recent: byDateDesc(expenseRows(ymStr)).slice(0, 8), lastCollect: byDateDesc(cashRows()).slice(0, 3), home: (() => { try { return homeData(); } catch (e) { return null; } })(), bank: (() => { try { const b = bankData(); return { balance: b.balance, open: b.open, from: b.from, last: b.days[0] || null, check: b.checks[0] || null, float: b.float, used: b.used, mism: b.mism, miss: b.miss }; } catch (e) { return null; } })(), perBarber: d.map(r => ({ name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid })).sort((a, b) => S.indexOf(a.shop) - S.indexOf(b.shop) || (a.name < b.name ? -1 : 1)) };
+  return { ok: true, date: day, byShop, notYet, offToday, mtd, alerts: alertList(day), cash: cashBalance(), pond: pondData().today, recent: byDateDesc(expenseRows(ymStr)).slice(0, 8), lastCollect: byDateDesc(cashRows()).slice(0, 3), home: (() => { try { return homeData(); } catch (e) { return null; } })(), bank: (() => { try { const b = bankData(); return { balance: b.balance, open: b.open, from: b.from, last: b.days[0] || null, check: b.checks[0] || null, float: b.float, used: b.used, mism: b.mism, miss: b.miss, low: b.low, missM: b.tr ? b.tr.missM : [], diffM: b.tr ? b.tr.diffM : [] }; } catch (e) { return null; } })(), perBarber: d.map(r => ({ name: r.name, shop: r.shop, heads: r.heads, sales: r.sales, wage: r.paid })).sort((a, b) => S.indexOf(a.shop) - S.indexOf(b.shop) || (a.name < b.name ? -1 : 1)) };
 }
 
 /** กล่องเตือนหน้าแรก — รวมสิ่งที่ค้าง/ผิดปกติ (ไม่รวมโอนปอน/บัญชี ซึ่งหน้าเว็บเติมเองจาก pond/bank) */
@@ -134,6 +135,8 @@ function alertList(day) {
   try { const from = ymd(new Date(todayBkk().getTime() - 7 * 86400000)); const tk = tipTaken(); const all = dailyRows(r => r.d >= from && r.d < today); const sl = slipRows(x => x.d >= from && slipCounted(x) && x.amount != null);
     const bad = all.filter(r => r.transfer > 0 || tipOf(r, tk) > 0).filter(r => { const s = sl.filter(x => x.d === r.d && x.shop === r.shop && x.name === r.name).reduce((a, x) => a + num(x.amount), 0); return s !== r.transfer + tipOf(r, tk); });
     if (bad.length) out.push({ t: '🧾 สลิปไม่ตรงยอดโอน ' + bad.length + ' รายการ (' + bad.slice(0, 3).map(r => r.name + ' ' + r.d.slice(5)).join(', ') + (bad.length > 3 ? ' …' : '') + ')', go: 'daily', b: 'ดู' });
+    const wp = slipRows(x => x.d >= from && slipCounted(x) && slipBadPay(x));
+    if (wp.length) out.push({ t: '🏦 สลิปโอนผิดบัญชี ' + wp.length + ' ใบ (' + wp.slice(-3).reverse().map(x => x.name + ' ' + x.d.slice(5) + ' · ' + (x.amount == null ? '?' : money(x.amount))).join(', ') + (wp.length > 3 ? ' …' : '') + ')', go: 'pond', b: 'ดู' });
 const tdm = tipDue(); const td = Object.keys(tdm).map(k => tdm[k]); const late = td.filter(o => o.overdue > 0), over = td.filter(o => o.over > 0);
     if (late.length) out.push({ t: '💵 ทิปค้างหยิบเกิน 1 วัน: ' + late.map(o => o.name + ' ' + money(o.overdue)).join(', ') + ' — ให้ช่างหยิบ + กดเมนูทิป', go: 'daily', b: 'ดู' });
     if (over.length) out.push({ t: '💵 ช่างกดหยิบทิปเกินที่กรอก: ' + over.map(o => o.name + ' ' + money(o.over)).join(', '), go: 'daily', b: 'ดู' }); } catch (e) {}
@@ -194,7 +197,7 @@ function dailyGet(dateStr, shop) {
   const rows = names.map(n => { const r = ex.find(e => e.name === n); const b = barberByName(n); return { name: n, main: b && b.shop === shop, punched: punched.includes(n), heads: r ? r.heads : '', sales: r ? r.sales : '', cash: r ? r.cash : '', transfer: r ? r.transfer : '', tip: r ? r.tip : null, due: (tdue[shop + '|' + n] || {}).due || 0, overdue: (tdue[shop + '|' + n] || {}).overdue || 0, calc: r ? r.calc : '', over: r ? r.over : '', paid: r ? r.paid : '', note: r ? r.note : '', exists: !!r }; });
   rows.sort((a, b) => (b.main - a.main) || (b.punched - a.punched));
   const sl = slipRows(x => x.d === day && x.shop === shop && slipCounted(x)), bk = slipRows(x => x.d === day && x.shop === shop && x.note === 'สมุด'), tips = expenseRows().filter(x => x.d === day && x.shop === shop && x.type === 'ทิปช่าง');
-  rows.forEach(r => { const m = sl.filter(x => x.name === r.name); r.slips = m.map(x => ({ row: x.row, amount: x.amount, read: x.read, link: x.link, at: x.at, note: x.note })); r.tips = tips.filter(x => x.name === r.name).reduce((a, x) => a + x.amt, 0); });
+  rows.forEach(r => { const m = sl.filter(x => x.name === r.name); r.slips = m.map(x => ({ row: x.row, amount: x.amount, read: x.read, link: x.link, at: x.at, note: x.note, badPay: slipBadPay(x) })); r.tips = tips.filter(x => x.name === r.name).reduce((a, x) => a + x.amt, 0); });
   return { ok: true, date: day, shop, rows, others, books: bk.map(x => ({ link: x.link, at: x.at, name: x.name })), shopNote: noteRows(x => x.d === day && x.shop === shop)[0] || null, cashAt: (cashBalance(day)[shop] || {}).balance, cash: cashBalance()[shop] || null };
 }
 function dailySave(a, p) {
@@ -337,18 +340,20 @@ function barberSave(p) {
  *     ยอดควรมี = ยอดยกมา + เงินโอนลูกค้า (คอลัมน์ โอน ที่ manager กรอก + ทิปที่ลูกค้าโอนรวมมา) − โอนรายวัน (ปอน) − รายการออก
  * (ข) B78 มีตัวเลข = วงเงินสำรอง — เงินโอนลูกค้าเข้าบัญชี owner โดยตรง · manager ถือแค่วงเงินสำรองไว้โอนปอน + รายการที่ขออนุญาตแล้ว
  *     คงเหลือ = วงเงินตั้งต้น (B76 ณ เช้า B77) + ที่ owner เติม − โอนรายวัน (ปอน) − รายการออก
- *     owner กรอก "เงินเข้าบัญชีจริง" รายวัน → เทียบกับ โอน+ทิป ที่ manager กรอก · ไม่ตรง = เตือนหน้าแรก + ไลน์แจ้ง manager
+ *     เงินโอนลูกค้าทั้ง 3 ร้านเข้าบัญชี owner (บัญชีต่อร้านดูที่ ตั้งค่า!A79:D82 — payCfg ใน Staff.gs) → transferData()
+ *     รายวัน: ระบบเทียบ โอน+ทิป ที่ manager กรอก กับสลิปที่ช่างส่ง + ตรวจผู้รับบนสลิป · ตรง = owner ไม่ต้องทำอะไร
+ *     รายเดือน: owner กรอก "เงินเข้าบัญชีจริง" ต่อบัญชี เดือนละครั้ง (ชนิด เข้าจริงเดือน) · ไม่ตรง = เตือนหน้าแรก + ไลน์แจ้ง manager
  * สลิปลูกค้า (แผ่น สลิปโอน ไม่นับ ซ้ำ/สมุด/ไม่ใช่สลิป) ใช้ตรวจ — วันไหนสลิปไม่ตรงกับ โอน+ทิป ขึ้นเตือน
  * รายการออก: manager โทรขออนุญาต owner ก่อน แล้วลงเอง (ไม่มีขั้นอนุมัติในแอป) · ส่วนตัวต้องเลือก ให้ / เบิก
  * ตั้งค่า!B75 ร้าน · B76 ยอดยกมา/วงเงินตั้งต้น · B77 ณ เช้าวันที่ · B78 วงเงินสำรอง
- * แผ่น "บัญชีผู้จัดการ": A รหัส B วันที่ C ชนิด(ออก/ยอดจริง/เติม/เข้าจริง) D ประเภท E ร้าน F ช่าง G จำนวน H รายละเอียด I สถานะ J ผู้บันทึก K บันทึกเมื่อ L ลิงก์สลิป M ยอดควรมีตอนกรอก */
+ * แผ่น "บัญชีผู้จัดการ": A รหัส B วันที่ C ชนิด(ออก/ยอดจริง/เติม/เข้าจริงเดือน [B = วันที่ 1 ของเดือน, E = 'acct:' + เลขท้ายบัญชี] · เข้าจริง = แบบรายวันเดิม เลิกใช้) D ประเภท E ร้าน F ช่าง G จำนวน H รายละเอียด I สถานะ J ผู้บันทึก K บันทึกเมื่อ L ลิงก์สลิป M ยอดควรมีตอนกรอก */
 const SH_BANK = 'บัญชีผู้จัดการ', BANK_FROM = 'บัญชีผู้จัดการ';
 const BANK_GIVE = 'ส่วนตัว: ให้', BANK_ADV = 'ส่วนตัว: เบิก';
 // ไม่ใช่รายจ่ายร้าน (ไม่เข้า P&L) · 'ส่วนตัว (ไม่ใช่ร้าน)' = ประเภทเก่าก่อนแยก ให้/เบิก (ยังรับได้ แต่ไม่แสดงให้เลือก)
 const BANK_OTHER = [BANK_GIVE, BANK_ADV, 'ส่งเงินให้ owner', 'ส่วนตัว (ไม่ใช่ร้าน)'];
 // ประเภทเพิ่มเฉพาะบัญชีผู้จัดการ (ค่าใช้จ่ายร้าน) → ลงแผ่นรายจ่ายเป็น อื่นๆ (P&L มีคอลัมน์ตายตัว) รายละเอียดขึ้นต้นด้วยชื่อประเภท
 const BANK_EXTRA = { 'ค่าน้ำมัน': 'อื่นๆ', 'ค่าทางด่วน': 'อื่นๆ' };
-const FLOAT_LOW = 1000; // วงเงินสำรองเหลือต่ำกว่านี้ → เตือน owner ให้เติม
+const FLOAT_LOW = 700; // วงเงินสำรองเหลือต่ำกว่านี้ → เตือน owner ให้เติม
 function bankSheet() {
   let s = ss().getSheetByName(SH_BANK); if (s) return s;
   s = ss().insertSheet(SH_BANK); s.getRange('A1:M1').setValues([['รหัส', 'วันที่', 'ชนิด', 'ประเภท', 'ร้าน', 'ช่าง', 'จำนวน', 'รายละเอียด', 'สถานะ', 'ผู้บันทึก', 'บันทึกเมื่อ', 'ลิงก์สลิป', 'ยอดควรมีตอนกรอก']]).setFontWeight('bold'); s.setFrozenRows(1);
@@ -367,7 +372,7 @@ function bankData() {
   const slips = slipRows(x => x.shop === c.shop && x.d >= from && slipCounted(x) && x.amount > 0);
   const pays = dailyPayRows().filter(x => x.paidOn >= from);
   const rows = bankRows(); const live = rows.filter(x => x.status !== 'ยกเลิก' && x.d >= from);
-  const outs = live.filter(x => x.kind === 'ออก'), tops = live.filter(x => x.kind === 'เติม'), acts = live.filter(x => x.kind === 'เข้าจริง');
+  const outs = live.filter(x => x.kind === 'ออก'), tops = live.filter(x => x.kind === 'เติม');
   const tk = tipTaken(); const tr = dailyRows(r => r.shop === c.shop && r.d >= from && (r.transfer > 0 || tipOf(r, tk) > 0)); // เงินเข้าบัญชีจริง = โอน (หลังหักทิป) + ทิปโอน
   const days = {}; const day = k => days[k] = days[k] || { d: k, in: 0, tip: 0, slip: 0, nIn: 0, pond: 0, out: 0, top: 0, act: null };
   tr.forEach(r => { const o = day(r.d), t = tipOf(r, tk); o.in += r.transfer + t; o.tip += t; });
@@ -375,9 +380,8 @@ function bankData() {
   pays.forEach(x => { day(x.paidOn).pond += x.amt - x.ded; }); // โอนจริง = ค่าแรง − หักเบิก
   outs.forEach(x => { day(x.d).out += x.amt; });
   tops.forEach(x => { day(x.d).top += x.amt; });
-  acts.forEach(x => { day(x.d).act = x.amt; }); // แถวล่าสุดของวันนั้น (แถวเก่าถูกยกเลิกตอนกรอกใหม่)
   const list = Object.values(days).sort((a, b) => a.d < b.d ? -1 : 1); let bal = c.open || 0;
-  list.forEach(o => { bal += (fl ? o.top : o.in) - o.pond - o.out; o.bal = bal; o.warn = o.nIn > 0 && o.slip !== o.in; o.diff = o.act == null ? null : o.act - o.in; });
+  list.forEach(o => { bal += (fl ? o.top : o.in) - o.pond - o.out; o.bal = bal; o.warn = o.nIn > 0 && o.slip !== o.in; });
   const sum = k => list.reduce((a, o) => a + o[k], 0);
   const tot = { warn: list.filter(o => o.warn).length, in: sum('in'), pond: sum('pond'), out: sum('out'), top: sum('top') };
   const balance = c.open == null ? null : c.open + (fl ? tot.top : tot.in) - tot.pond - tot.out;
@@ -387,8 +391,7 @@ function bankData() {
   // ---- วงเงินสำรอง ----
   const mNow = today.slice(0, 7); const pers = t => rows.filter(x => x.kind === 'ออก' && x.status !== 'ยกเลิก' && x.type === t && x.d.slice(0, 7) === mNow).reduce((a, x) => a + x.amt, 0); // ทั้งเดือน (รวมก่อนวันเริ่มวงเงิน) — ใช้หักเงินเดือน manager
   out.used = balance == null ? null : c.float - balance; out.give = pers(BANK_GIVE); out.adv = pers(BANK_ADV); out.low = FLOAT_LOW;
-  out.mism = list.filter(o => o.diff).slice(-7).reverse().map(o => ({ d: o.d, act: o.act, in: o.in, slip: o.slip, diff: o.diff }));
-  out.miss = list.filter(o => o.d < today && o.in > 0 && o.act == null).length; // วันที่มีเงินโอนแต่ owner ยังไม่กรอกเข้าจริง
+  out.tr = transferData(rows, today); // เงินโอนลูกค้า 3 ร้าน (mism/miss รายวันเลิกใช้ — คงไว้เป็นค่าว่างให้หน้าเว็บรุ่นเก่าไม่พัง)
   // รายการเคลื่อนไหวของวงเงิน: เติม (+) · โอนปอน (−, รวมต่อวัน/ช่าง) · รายการออก (−)
   const pg = {}; pays.forEach(x => { const k = x.paidOn + '|' + x.name; const o = pg[k] = pg[k] || { d: x.paidOn, t: 'โอนค่าแรง ' + x.name, amt: 0, n: 0, kind: 'ปอน', link: x.link }; o.amt -= x.amt - x.ded; o.n++; });
   const mv = Object.values(pg).map(o => Object.assign(o, { detail: o.n + ' วัน' }))
@@ -479,20 +482,49 @@ function bankTopup(a, p) {
     return { ok: true, msg: 'เติม ' + money(amt) + ' บาท · คงเหลือ ' + money(data.balance), data };
   } finally { lock.releaseLock(); }
 }
-/** owner กรอกเงินเข้าบัญชีจริงของวันนั้น (จากแอปธนาคาร) → เทียบกับ โอน+ทิป ที่ manager กรอก · ไม่ตรง = ไลน์แจ้ง manager · กรอกซ้ำวันเดิม = แก้ */
+/** เงินโอนลูกค้าทุกร้าน (เข้าบัญชี owner) — เทียบ โอน+ทิป ที่ manager กรอก กับสลิปที่ช่างส่ง + ผู้รับบนสลิป + เงินเข้าบัญชีจริงรายเดือน
+ *  ร้านนับตั้งแต่วันที่เริ่มรับโอนเข้าบัญชี owner (ตั้งค่า D80:D82) · วันนี้ที่ manager ยังไม่กรอกยอดไม่นับ (กันเตือนก่อนปิดร้าน)
+ *  เทียบระดับ ร้าน/วัน (ลูกค้าจ่ายรวมให้ช่าง 2 คน สลิปอยู่กับช่างคนเดียว แต่ยอดรวมร้านต้องตรง) */
+function transferData(bRows, today) {
+  const pc = payCfg(); const S = shops().map(s => s.name); const tk = tipTaken(); const mNow = today.slice(0, 7);
+  const fromOf = s => (pc.shops[s] ? pc.shops[s].from : START_DATE), acctOf = s => (pc.shops[s] && pc.shops[s].acct) || s;
+  const m = {}; const cell = (d, s) => m[d + '|' + s] = m[d + '|' + s] || { d, shop: s, in: 0, slip: 0, n: 0, ent: false, who: {} };
+  dailyRows(r => r.d >= fromOf(r.shop)).forEach(r => { const o = cell(r.d, r.shop), v = r.transfer + tipOf(r, tk); o.ent = true; o.in += v; o.who[r.name] = (o.who[r.name] || 0) + v; });
+  slipRows(x => x.d >= fromOf(x.shop) && slipCounted(x) && x.amount > 0).forEach(x => { const o = cell(x.d, x.shop); o.slip += num(x.amount); o.n++; o.who[x.name] = (o.who[x.name] || 0) - num(x.amount); });
+  const cells = Object.keys(m).map(k => m[k]).filter(o => S.includes(o.shop) && (o.ent || o.d < today) && (o.in || o.slip));
+  const inM = (ymStr, s) => cells.filter(o => o.shop === s && o.d.slice(0, 7) === ymStr);
+  const sum = (a, k) => a.reduce((t, o) => t + o[k], 0);
+  const byShop = S.map(s => { const c = inM(mNow, s); return { shop: s, acct: acctOf(s), from: fromOf(s), in: sum(c, 'in'), slip: sum(c, 'slip') }; });
+  const bad = cells.filter(o => o.in !== o.slip).sort((a, b) => a.d < b.d ? 1 : a.d > b.d ? -1 : 0).slice(0, 30).map(o => ({ d: o.d, shop: o.shop, in: o.in, slip: o.slip, names: Object.keys(o.who).filter(n => o.who[n]) }));
+  const wrong = slipRows(x => x.d >= fromOf(x.shop) && slipCounted(x) && slipBadPay(x)).slice(-30).reverse().map(x => ({ d: x.d, shop: x.shop, name: x.name, amount: x.amount, link: x.link, row: x.row, payee: x.payee }));
+  // ---- รายเดือน ต่อบัญชี ----
+  const accts = []; S.forEach(s => { const a = acctOf(s); let o = accts.find(x => x.acct === a); if (!o) accts.push(o = { acct: a, shops: [] }); o.shops.push(s); });
+  const acts = bRows.filter(x => x.kind === 'เข้าจริงเดือน' && x.status !== 'ยกเลิก');
+  const bankCash = cashRows().filter(x => /โอน/.test(x.method)); // เงินสดร้านที่ช่างฝาก/โอนเข้าธนาคาร (เมนู เก็บเงินสด › โอนเข้าธนาคาร) — เข้าบัญชีร้านเดียวกัน จึงนับรวมในยอดที่ควรเข้า
+  const mk = ymStr => ({ ym: ymStr, accts: accts.map(a => { const tr = a.shops.reduce((t, s) => t + sum(inM(ymStr, s), 'in'), 0), cash = bankCash.filter(x => x.d.slice(0, 7) === ymStr && a.shops.includes(x.shop) && x.d >= fromOf(x.shop)).reduce((t, x) => t + x.amt, 0), exp = tr + cash; const r = acts.filter(x => x.d.slice(0, 7) === ymStr && x.shop === 'acct:' + a.acct).pop(); const act = r ? r.amt : null; return { acct: a.acct, shops: a.shops, tr, cash, exp, act, diff: act == null ? null : act - exp }; }) });
+  const months = []; for (let d = parseYmd(mNow + '-01'), i = 0; i < 6; i++) { d.setMonth(d.getMonth() - 1); const k = ym(d); if (k < START_DATE.slice(0, 7)) break; months.push(mk(k)); } // เดือนที่ปิดแล้ว ล่าสุดก่อน
+  const missM = months.filter(o => o.accts.some(a => a.act == null && a.exp > 0)).map(o => o.ym);
+  const diffM = []; months.forEach(o => o.accts.forEach(a => { if (a.diff) diffM.push({ ym: o.ym, acct: a.acct, shops: a.shops, exp: a.exp, act: a.act, diff: a.diff }); }));
+  return { ym: mNow, byShop, bad, wrong, months, cur: mk(mNow), missM, diffM, set: pc.names.length > 0 };
+}
+/** owner กรอกเงินเข้าบัญชีจริงของทั้งเดือน ต่อบัญชี (จากแอปธนาคาร) → เทียบกับ โอน+ทิป ที่ manager กรอก + เงินสดที่ช่างฝากเข้าธนาคาร · ไม่ตรง = ไลน์แจ้ง manager · กรอกซ้ำ = แก้
+ *  p.ym = 'yyyy-MM' (เดือนที่ปิดแล้วเท่านั้น) · p.items = [{ acct, amount }] */
 function bankActual(a, p) {
-  const day = parseYmd(p.date); if (!day) return { ok: false, msg: 'เลือกวันที่' }; const d = ymd(day); if (d > ymd(todayBkk())) return { ok: false, msg: 'วันที่ต้องไม่เกินวันนี้' };
-  const v = String(p.amount == null ? '' : p.amount).replace(/,/g, ''); if (v === '' || !isFinite(Number(v)) || Number(v) < 0) return { ok: false, msg: 'ใส่ยอดเงินเข้าบัญชี (0 ได้)' };
-  const c = bankCfg(); if (c.float == null) return { ok: false, msg: 'ยังไม่ได้ตั้งวงเงินสำรอง (รายงาน › ตั้งค่า)' }; if (d < c.from) return { ok: false, msg: 'กรอกได้ตั้งแต่ ' + c.from };
-  const amt = num(v);
+  const today = ymd(todayBkk()); const ymStr = String(p.ym || ''); if (!/^\d{4}-\d{2}$/.test(ymStr)) return { ok: false, msg: 'เลือกเดือน' };
+  if (ymStr >= today.slice(0, 7)) return { ok: false, msg: 'กรอกได้เมื่อจบเดือนแล้ว (วันที่ 1 ของเดือนถัดไป)' }; if (ymStr < START_DATE.slice(0, 7)) return { ok: false, msg: 'ก่อนวันเริ่มระบบ' };
+  const items = (Array.isArray(p.items) ? p.items : []).map(x => ({ acct: clean(x.acct, 20), v: String(x.amount == null ? '' : x.amount).replace(/,/g, '').trim() })).filter(x => x.v !== '');
+  if (!items.length) return { ok: false, msg: 'ใส่ยอดเงินเข้าบัญชี' }; if (items.some(x => !isFinite(Number(x.v)) || Number(x.v) < 0)) return { ok: false, msg: 'ยอดเงินไม่ถูกต้อง' };
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
-    const s = bankSheet(); bankRows().filter(x => x.kind === 'เข้าจริง' && x.d === d && x.status !== 'ยกเลิก').forEach(x => { s.getRange(x.row, 9).setValue('ยกเลิก'); s.getRange(x.row, 11).setValue(x.at + ' · แก้โดย ' + a.name + ' ' + nowText()); });
-    const o = bankData().days.find(x => x.d === d) || { in: 0, slip: 0 };
-    const id = 'B' + seq('B_SEQ'); s.appendRow([id, day, 'เข้าจริง', '', c.shop, '', amt, '', 'บันทึก', a.name, nowText(), '', o.in]);
-    clearMemo(); const diff = amt - o.in;
-    if (diff) try { pushAdmins('⚠️ เงินโอน' + c.shop + ' ' + d + ' ไม่ตรง\nเข้าบัญชีจริง ' + money(amt) + '\nที่กรอก (โอน+ทิป) ' + money(o.in) + '\nสลิปที่ช่างส่ง ' + money(o.slip) + '\n→ ' + (diff < 0 ? 'ขาด ' : 'เกิน ') + money(Math.abs(diff)) + ' บาท\nตรวจสลิป/ยอดกับช่าง แล้วแก้ที่ บันทึก › กรอกยอด', ['office'], null, true); } catch (e) {}
-    return { ok: true, msg: d.slice(5) + ' เข้าจริง ' + money(amt) + (diff ? ' · ไม่ตรงกับที่กรอก ' + money(o.in) + ' (' + (diff > 0 ? '+' : '−') + money(Math.abs(diff)) + ') แจ้ง manager ทางไลน์แล้ว' : ' · ตรงกับที่กรอก ✓'), data: bankData() };
+    const mo = (transferData(bankRows(), today).months.find(o => o.ym === ymStr) || { accts: [] }).accts; const s = bankSheet(); const first = parseYmd(ymStr + '-01'); const res = [];
+    for (const it of items) { const ac = mo.find(x => x.acct === it.acct); if (!ac) return { ok: false, msg: 'ไม่พบบัญชี ' + it.acct }; }
+    items.forEach(it => { const ac = mo.find(x => x.acct === it.acct), amt = num(it.v);
+      bankRows().filter(x => x.kind === 'เข้าจริงเดือน' && x.d.slice(0, 7) === ymStr && x.shop === 'acct:' + it.acct && x.status !== 'ยกเลิก').forEach(x => { s.getRange(x.row, 9).setValue('ยกเลิก'); s.getRange(x.row, 11).setValue(x.at + ' · แก้โดย ' + a.name + ' ' + nowText()); });
+      s.appendRow([ 'B' + seq('B_SEQ'), first, 'เข้าจริงเดือน', '', 'acct:' + it.acct, '', amt, ac.shops.join(' + '), 'บันทึก', a.name, nowText(), '', ac.exp]); clearMemo();
+      res.push({ acct: it.acct, shops: ac.shops, amt, exp: ac.exp, diff: amt - ac.exp }); });
+    const bad = res.filter(x => x.diff);
+    if (bad.length) try { pushAdmins('⚠️ เงินเข้าบัญชีจริง ' + ymStr + ' ไม่ตรง\n' + bad.map(x => 'บัญชี …' + x.acct + ' (' + x.shops.join(' + ') + ')\nเข้าจริง ' + money(x.amt) + ' · ระบบ (โอนลูกค้า + เงินสดฝากธนาคาร) ' + money(x.exp) + ' → ' + (x.diff < 0 ? 'ขาด ' : 'เกิน ') + money(Math.abs(x.diff))).join('\n') + '\nไล่ดูรายวันที่ บันทึก › เงิน / กรอกยอด', ['office'], null, true); } catch (e) {}
+    return { ok: true, msg: ymStr + ': ' + res.map(x => '…' + x.acct + (x.diff ? ' ' + (x.diff > 0 ? 'เกิน ' : 'ขาด ') + money(Math.abs(x.diff)) : ' ตรง ✓')).join(' · ') + (bad.length ? ' — แจ้ง manager ทางไลน์แล้ว' : ''), data: bankData() };
   } finally { lock.releaseLock(); }
 }
 /** owner สลับรายการส่วนตัวของ manager: ให้ ↔ เบิก */
