@@ -442,6 +442,7 @@ const BANK_OTHER = [BANK_GIVE, BANK_ADV, 'ส่งเงินให้ owner',
 // ประเภทเพิ่มเฉพาะบัญชีผู้จัดการ (ค่าใช้จ่ายร้าน) → ลงแผ่นรายจ่ายเป็น อื่นๆ (P&L มีคอลัมน์ตายตัว) รายละเอียดขึ้นต้นด้วยชื่อประเภท
 const BANK_EXTRA = { 'ค่าน้ำมัน': 'อื่นๆ', 'ค่าทางด่วน': 'อื่นๆ' };
 const FLOAT_LOW = 700;
+const SLIP_FROM = '2026-11-06'; // วันแรกที่ช่างส่งสลิปเข้า OA จริง — การเทียบ โอนที่กรอก กับ สลิป เริ่มนับจากวันนี้
 const CASH_CONFIRM_FROM = '2026-11-24'; // เงินสดที่มีคนมาเก็บ ตั้งแต่วันนี้ ต้องให้ owner ยืนยันยอดที่ได้รับ (owner สั่ง 24 พ.ย. 69 — ไม่ย้อนหลัง)
 const CASH_MAX = { 'โลตัส': 2000 }; // เงินสดลิ้นชักต่อร้านที่ยอมให้ค้าง — เกินนี้เตือนให้นำฝาก (ราม: ดีนเข้าไปเก็บ · Kraft: owner เก็บ จึงไม่ตั้ง) // วงเงินสำรองเหลือต่ำกว่านี้ → เตือน owner ให้เติม
 function bankSheet() {
@@ -584,8 +585,10 @@ function transferData(bRows, today) {
   const cells = Object.keys(m).map(k => m[k]).filter(o => S.includes(o.shop) && (o.ent || o.d < today) && (o.in || o.slip));
   const inM = (ymStr, s) => cells.filter(o => o.shop === s && o.d.slice(0, 7) === ymStr);
   const sum = (a, k) => a.reduce((t, o) => t + o[k], 0);
-  const byShop = S.map(s => { const c = inM(mNow, s); return { shop: s, acct: acctOf(s), from: fromOf(s), in: sum(c, 'in'), slip: sum(c, 'slip') }; });
-  const bad = cells.filter(o => o.in !== o.slip).sort((a, b) => a.d < b.d ? 1 : a.d > b.d ? -1 : 0).slice(0, 30).map(o => ({ d: o.d, shop: o.shop, in: o.in, slip: o.slip, names: Object.keys(o.who).filter(n => o.who[n]) }));
+  // เทียบกับสลิปได้ตั้งแต่วันที่ช่างเริ่มส่งสลิปเข้า OA (SLIP_FROM) — ก่อนหน้านั้นไม่มีสลิปในระบบ ไม่นับว่าไม่ตรง
+  const sf = s => fromOf(s) > SLIP_FROM ? fromOf(s) : SLIP_FROM;
+  const byShop = S.map(s => { const c = inM(mNow, s).filter(o => o.d >= sf(s)); return { shop: s, acct: acctOf(s), from: sf(s), in: sum(c, 'in'), slip: sum(c, 'slip') }; });
+  const bad = cells.filter(o => o.d >= sf(o.shop) && o.in !== o.slip).sort((a, b) => a.d < b.d ? 1 : a.d > b.d ? -1 : 0).slice(0, 30).map(o => ({ d: o.d, shop: o.shop, in: o.in, slip: o.slip, names: Object.keys(o.who).filter(n => o.who[n]) }));
   const wrong = slipRows(x => x.d >= fromOf(x.shop) && slipCounted(x) && slipBadPay(x)).slice(-30).reverse().map(x => ({ d: x.d, shop: x.shop, name: x.name, amount: x.amount, link: x.link, row: x.row, payee: x.payee }));
   // ---- รายเดือน ต่อบัญชี ----
   const accts = []; S.forEach(s => { const a = acctOf(s); let o = accts.find(x => x.acct === a); if (!o) accts.push(o = { acct: a, shops: [] }); o.shops.push(s); });
