@@ -186,6 +186,10 @@ function sameSlip(x, ref, amount) { return sameRef(x.ref, ref) && (x.read == nul
 function slipKey(p) { return p && p.amount != null && p.date && p.time ? Number(p.amount) + '|' + p.date.m + '/' + p.date.d + '|' + p.time : ''; }
 function slipCounted(x) { return !/^(ซ้ำ|ไม่ใช่สลิป|สมุด)/.test(x.note || ''); }
 const LOOKS_SLIP = /สำเร็จ|ธรรมเนียม|อางอิง|เลขทีรายการ|successful|Amount|THB|PromptPay|พรอมเพย|K ?PLUS|SCB|Krungthai|Bangkok Bank|กสิกร|ไทยพาณิชย|กรุงเทพ|กรุงไทย|กรุงศรี|ออมสิน|ttb|Make by KBank|MAKE/i;
+/** ใบฝากเงินสดจากตู้ ATM/CDM (ช่างนำเงินสดในลิ้นชักไปฝาก) — ไม่ใช่สลิปลูกค้า ไม่นับยอด · ช่างต้องลงที่เมนู เก็บเงินสด › โอนเข้าธนาคาร */
+const DEP_SLIP = /AUTO\s*DEP|TRANSACTION\s+RECORD|Denomination|จำนวนธนบัตร|ใบบันทึกรายการ/i;
+const DEP_NOTE = 'ไม่ใช่สลิป (ใบฝากเงินสด)';
+function isDepositSlip(text) { return DEP_SLIP.test(thaiNorm(text)); }
 /** สลิป = มีคำเฉพาะของสลิปธนาคาร + (อ่านยอดได้ หรือ มีเลขอ้างอิง) — ไม่งั้นถือเป็นรูปสมุด/อื่นๆ */
 function isSlipText(text, p) { return LOOKS_SLIP.test(thaiNorm(text)) && (p.amount != null || !!p.ref); }
 
@@ -248,6 +252,7 @@ function slipIntake(uid, msgId, set) {
     if (row) r = slipRead(row, blob);
     if (!setId) {
       if (r.st === 'dupimg') return '⚠️ สลิปนี้ส่งไปแล้ว (รูปซ้ำ) — ไม่ได้บันทึกซ้ำ';
+      if (r.st === 'dep') return '🏧 นี่คือใบฝากเงินสด — ไม่นับเป็นสลิปลูกค้า\nถ้ายังไม่ได้ลง: กดเมนู "เก็บเงินสด" › โอนเข้าธนาคาร ใส่ยอด แล้วแนบรูปนี้';
       if (r.st === 'book') return '📒 รับรูปสมุดแล้ว — ผู้จัดการจะใช้ตรวจตอนกรอกยอด\n(ถ้าเป็นสลิปแต่ระบบอ่านไม่ออก ผู้จัดการจะตรวจเอง)';
       if (r.st === 'dup') return '⚠️ สลิป ' + (r.amount != null ? money(r.amount) + ' บาท ' : '') + 'นี้' + (r.twin && r.twin !== b.name ? ' ' + r.twin + ' ส่งไปแล้ว — นับครั้งเดียว\n(ลูกค้าจ่ายรวมให้ 2 คน ผู้จัดการจะแบ่งยอดตอนกรอก)' : 'ส่งไปแล้ว — ไม่นับซ้ำ');
       const mine = slipRows(x => x.d === day && x.name === b.name && x.shop === shop && slipCounted(x)); const tot = mine.reduce((a, x) => a + (x.amount || 0), 0);
@@ -268,7 +273,7 @@ function slipIntake(uid, msgId, set) {
 function slipSetSummary(name, setId, total, extra) {
   const rs = slipRows(x => x.set === setId), day = ymd(todayBkk());
   const ok = rs.filter(x => slipCounted(x) && x.note !== SLIP_WAIT), amts = ok.filter(x => x.amount != null).map(x => x.amount), bad = ok.filter(x => x.amount == null);
-  const dup = rs.filter(x => /^ซ้ำ/.test(x.note)).length + (extra.dupimg || 0), book = rs.filter(x => x.note === 'สมุด').length, old = ok.filter(x => /ไม่ใช่วันนี้/.test(x.note)).length;
+  const dup = rs.filter(x => /^ซ้ำ/.test(x.note)).length + (extra.dupimg || 0), book = rs.filter(x => x.note === 'สมุด').length, dep = rs.filter(x => x.note === DEP_NOTE).length, old = ok.filter(x => /ไม่ใช่วันนี้/.test(x.note)).length;
   const shop = rs.length ? rs[0].shop : ''; const wrong = ok.filter(slipBadPay);
   const mine = slipRows(x => x.d === day && x.name === name && x.shop === shop && slipCounted(x)), tot = mine.reduce((a, x) => a + (x.amount || 0), 0), sum = amts.reduce((a, v) => a + v, 0);
   return '🧾 รับสลิปทั้งสิ้น ' + ok.length + ' ใบ' + (shop ? ' · ' + shop : '') +
@@ -278,6 +283,7 @@ function slipSetSummary(name, setId, total, extra) {
     (dup ? '\n⚠️ ส่งซ้ำ ' + dup + ' ใบ (ไม่นับ)' : '') +
     (wrong.length ? '\n⚠️ ' + wrong.length + ' ใบ (' + wrong.map(x => x.amount == null ? '?' : money(x.amount)).join(', ') + ') ' + payeeMsg(shop) : '') +
     (book ? '\n📒 รูปสมุด ' + book + ' รูป' : '') +
+    (dep ? '\n🏧 ใบฝากเงินสด ' + dep + ' ใบ (ไม่นับเป็นสลิป) — ลงที่เมนู "เก็บเงินสด" › โอนเข้าธนาคาร ด้วย' : '') +
     (extra.err ? '\n⚠️ บันทึกไม่สำเร็จ ' + extra.err + ' รูป — ส่งรูปนั้นใหม่อีกครั้ง' : '') +
     (mine.length > ok.length ? '\nทั้งวันนี้ ' + mine.length + ' ใบ รวม ' + money(tot) + ' บาท' : '');
 }
@@ -289,6 +295,7 @@ function slipRead(row, blob) {
   const p = parseSlip(text);
   const lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
+    if (isDepositSlip(text)) { s.getRange(row, 10).setValue(DEP_NOTE); return { st: 'dep' }; }   // ใบฝากเงินสด → ไม่นับเป็นสลิปลูกค้า
     if (!isSlipText(text, p)) { s.getRange(row, 10).setValue('สมุด'); return { st: 'book' }; }   // ไม่ใช่สลิป → เก็บเป็นรูปสมุดให้ผู้จัดการดูตอนกรอกยอด
     const key = slipKey(p); if (key) s.getRange(row, 12).setValue(key);
     const twinR = p.ref ? slipRows(x => x.row !== row && slipCounted(x) && sameSlip(x, p.ref, p.amount))[0] : null;
