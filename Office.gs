@@ -393,36 +393,23 @@ function countSave(a, dateStr, shop, amt, diff, reason) {
   if (old) s.getRange(old.row, 1, 1, 9).setValues(vals); else s.getRange(s.getLastRow() + 1, 1, 1, 9).setValues(vals);
   clearMemo(); return { ok: true };
 }
-/* ---------- เตือน manager ทางไลน์ให้ปิดยอดของวันนี้ (วันละไม่เกิน 1 ข้อความ) ----------
- * (1) closeNudge(): เรียกทุกครั้งที่ช่างกดเลิกงาน / ส่งรูปเข้า OA / ส่งข้อความสรุปร้าน → เมื่อ "ช่างส่งยอดครบทุกร้าน" ส่งทันที
- *     ครบ = ช่างที่เข้างานวันนี้กดเลิกงานครบทุกคน และทุกร้านที่เปิดมีรูปสมุด (หรือข้อความสรุปร้าน)
- * (2) closeRemind(): สำรองด้วย time trigger รายวัน (เผื่อช่างลืมกดเลิกงาน/ลืมส่งสมุด) — ส่งเฉพาะเมื่อยังไม่เคยเตือนวันนี้
- * ทั้งสองแบบ: manager ปิดครบแล้ว (กรอกยอด + เงินสดนับได้ ทุกร้านที่เปิด) = ไม่ส่ง */
+/* ---------- เตือน manager ทางไลน์ให้ปิดยอดของวันนี้ ----------
+ * owner สั่ง 24 พ.ย. 69: ร้านปิด 21:00 → เตือนตอน 22:00 (ตั้ง time trigger รายวัน เวลา 22:00 ให้เรียก closeRemind)
+ * ส่งเฉพาะวันที่ยังปิดไม่ครบ: ร้านที่เปิดวันนี้ (มีช่างกดเข้างาน หรือมียอดแล้ว) ยังไม่กรอกยอด หรือยังไม่กรอกเงินสดนับได้
+ * manager ปิดครบแล้ว = ไม่ส่ง (ไม่เสียโควตา push) · วันละไม่เกิน 1 ข้อความ */
 function closePending(day) {
   const S = shops().map(s => s.name); const tin = timeRows(r => r.d === day && !!r.tin), dr = dailyRows(r => r.d === day); const lines = [];
   S.forEach(s => { if (!tin.some(r => r.shop === s) && !dr.some(r => r.shop === s)) return; // ร้านปิด/ไม่มีคนเข้างาน
     if (!dr.some(r => r.shop === s)) lines.push('• ' + s + ': ยังไม่กรอกยอด'); else if (countInfo(day, s).amount == null) lines.push('• ' + s + ': ยังไม่กรอกเงินสดนับได้'); });
   return lines;
 }
-function allSent(day) {
-  const tin = timeRows(r => r.d === day && !!r.tin); if (!tin.length || tin.some(r => !r.tout)) return false;
-  const open = []; tin.forEach(r => { if (!open.includes(r.shop)) open.push(r.shop); });
-  const bk = slipRows(x => x.d === day && x.note === 'สมุด'); let nt = []; try { nt = noteRows(x => x.d === day); } catch (e) {}
-  return open.every(s => bk.some(x => x.shop === s) || nt.some(x => x.shop === s));
-}
-/** ส่งข้อความเตือน (ถ้ายังไม่เคยส่งวันนี้ และยังปิดไม่ครบ) → คืนข้อความที่ส่ง · dry = true ไม่ส่งจริง ไม่ตั้งธง */
-function closeRemind(dry, head) {
+/** เรียกจาก time trigger → คืนข้อความที่ส่ง ('' = ไม่ต้องส่ง) · dry = true ใช้ทดสอบ: ไม่ส่งไลน์ ไม่ตั้งธง */
+function closeRemind(dry) {
   const day = ymd(todayBkk()); const c = CacheService.getScriptCache(), key = 'closeRem_' + day; if (dry !== true && c.get(key)) return '';
   const lines = closePending(day); if (!lines.length) return '';
-  const text = '⏰ ' + (head || 'กรุณาปิดยอดของวันนี้') + ' (' + day.slice(8) + '/' + day.slice(5, 7) + ')\n' + lines.join('\n') + '\nเปิดแอป › บันทึก › กรอกยอด';
+  const text = '⏰ กรุณาปิดยอดของวันนี้ (' + day.slice(8) + '/' + day.slice(5, 7) + ')\n' + lines.join('\n') + '\nเปิดแอป › บันทึก › กรอกยอด';
   if (dry !== true) { c.put(key, '1', 21600); pushAdmins(text, ['office'], null, true); }
   return text;
-}
-function closeNudge() {
-  const day = ymd(todayBkk()); try { if (CacheService.getScriptCache().get('closeRem_' + day)) return; } catch (e) {}
-  clearMemo(); if (!allSent(day)) return;
-  const lock = LockService.getScriptLock(); if (!lock.tryLock(5000)) return;
-  try { closeRemind(false, 'ช่างส่งยอดครบทุกร้านแล้ว — กรุณาปิดยอดของวันนี้'); } finally { lock.releaseLock(); }
 }
 
 /** owner ยืนยันเงินสดที่มีคนมาเก็บ: ใส่ยอดที่ได้รับจริง → เก็บผลที่ เงินสด คอลัมน์ J (รับ … / ⚠ …) · ไม่ตรง = ไลน์แจ้ง manager */
