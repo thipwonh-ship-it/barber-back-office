@@ -29,9 +29,9 @@ const T_DATE = 1, T_NAME = 2, T_SHOP = 3, T_SHIFT = 4, T_IN = 5, T_OUT = 6, T_LA
 // ยอดรายวัน: A วันที่ B ร้าน C ช่าง D หัว E ยอด F เงินสด G โอน H คำนวณ(สูตร) I แก้ J จ่าย(สูตร) K หมายเหตุ L เดือน(สูตร) M ผู้บันทึก
 const D_DATE = 1, D_SHOP = 2, D_NAME = 3, D_HEADS = 4, D_SALES = 5, D_CASH = 6, D_TRANSFER = 7, D_CALC = 8, D_OVER = 9, D_PAID = 10, D_NOTE = 11, D_MONTH = 12, D_BY = 13, D_TIP = 17; // Q = ทิปโอน ที่ผู้จัดการกรอก (N O P = สูตร)
 // รายจ่าย: A วันที่ B ร้าน C ประเภท D ช่าง E จำนวน F รายละเอียด G ผู้บันทึก H ลิงก์สลิป I เดือน(สูตร) J key(สูตร) K จ่ายจาก
-const X_DATE = 1, X_SHOP = 2, X_TYPE = 3, X_NAME = 4, X_AMT = 5, X_DETAIL = 6, X_BY = 7, X_LINK = 8, X_FROM = 11;
+const X_DATE = 1, X_SHOP = 2, X_TYPE = 3, X_NAME = 4, X_AMT = 5, X_DETAIL = 6, X_BY = 7, X_LINK = 8, X_FROM = 11, X_AT = 12; // L = เวลาที่ช่างกดบันทึก (HH:mm)
 // เงินสด: A วันที่ B ร้าน C วิธี D จำนวน E ผู้เก็บ F ผู้บันทึก G ลิงก์สลิป H เดือน(สูตร)
-const C_DATE = 1, C_SHOP = 2, C_METHOD = 3, C_AMT = 4, C_WHO = 5, C_BY = 6, C_LINK = 7;
+const C_DATE = 1, C_SHOP = 2, C_METHOD = 3, C_AMT = 4, C_WHO = 5, C_BY = 6, C_LINK = 7, C_AT = 9, C_CHK = 10, C_KEY = 11; // H = เดือน (สูตร) · I เวลา · J ผลตรวจใบฝาก (ok / ⚠…) · K คีย์ใบฝาก (กันใช้ใบเดิมซ้ำ)
 const CASH_FROM = 'เงินสดร้าน';
 const SESSION_HOURS = 6, ADT_DAYS = 90, ADT_MAX = 6;
 const FOLDER_NAME = 'Barber Back Office';

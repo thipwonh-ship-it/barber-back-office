@@ -4,7 +4,7 @@
 function whoAmI(tok) {
   const s = session(tok); if (!s) return { ok: false, expired: true };
   const b = barberByUid(s.uid); if (!b) return { ok: false, needPin: true };
-  return { ok: true, name: b.name, shop: b.shop, shops: shops().map(x => ({ name: x.name, open1: x.open1, open2: x.open2 })), reasons: takeReasons(), methods: cashMethods(), collector: defaultCollector(), today: todayStatus(b.name) };
+  return { ok: true, name: b.name, shop: b.shop, shops: shops().map(x => ({ name: x.name, open1: x.open1, open2: x.open2 })), reasons: takeReasons(), methods: cashMethods(), collector: defaultCollector(), today: todayStatus(b.name), mine: myToday(b.name), noDeposit: CASH_NO_DEPOSIT };
 }
 /** ผูกบัญชี LINE กับช่างด้วย PIN (ครั้งแรกครั้งเดียว) */
 function bindLine(tok, pin) {
@@ -70,32 +70,98 @@ function punch(tok, action, p) {
   } finally { lock.releaseLock(); }
 }
 
-/* ---------- หยิบเงินสดในร้าน (รีวิว 50 / ขายผลิตภัณฑ์ 50 / ซื้อของเล็กน้อย) ---------- */
+/* ---------- หยิบเงินสดในร้าน (รีวิว 50 / ขายผลิตภัณฑ์ 50 / ซื้อของเล็กน้อย / ทิป) ----------
+ * กันกดซ้ำ: (1) rid = รหัสของการกด 1 ครั้งจากหน้าเว็บ — ส่งซ้ำ (เน็ตหลุด/กดลองใหม่) ได้ผลเดิม ไม่ลงซ้ำ
+ *           (2) วันเดียวกัน ร้าน/ประเภท/ยอด เดียวกันของช่างคนเดิม → ตอบ dup ให้ช่างยืนยันก่อน (confirm) */
 const TAKE_TYPE = { 'รีวิว': 'รีวิว', 'ขาย': 'ขายผลิตภัณฑ์', 'ซื้อ': 'ของใช้', 'ทิป': 'ทิปช่าง' };
+const TAKE_LABEL = { 'รีวิว': 'รีวิว', 'ขายผลิตภัณฑ์': 'ขายของ', 'ของใช้': 'ซื้อของ', 'ทิปช่าง': 'ทิป' };
+const CASH_NO_DEPOSIT = ['ราม']; // ร้านที่ไม่ฝากเงินสดเข้าธนาคาร (มีคนเข้าไปเก็บ) — เมนู เก็บเงินสด ไม่ให้เลือก โอนเข้าธนาคาร
+function ensureCols(s, n, heads) { if (s.getMaxColumns() < n) s.insertColumnsAfter(s.getMaxColumns(), n - s.getMaxColumns()); Object.keys(heads || {}).forEach(c => { if (!s.getRange(1, +c).getValue()) s.getRange(1, +c).setValue(heads[c]).setFontWeight('bold'); }); }
+function ridGet(rid) { if (!rid) return null; try { const v = CacheService.getScriptCache().get('rid_' + rid); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+function ridPut(rid, res) { if (rid) try { CacheService.getScriptCache().put('rid_' + rid, JSON.stringify(res), 3600); } catch (e) {} return res; }
+/** รายการที่ช่างคนนี้กดบันทึกวันนี้ (หยิบเงินสด + เก็บเงินสด) — แสดงในหน้าช่างให้ดูว่ากดไปแล้วอะไรบ้าง */
+function myToday(name) {
+  const d = ymd(todayBkk());
+  const a = expenseRows().filter(x => x.d === d && x.by === name && x.from === CASH_FROM).map(x => ({ at: x.at, label: TAKE_LABEL[x.type] || x.type, detail: x.detail, amt: x.amt, shop: x.shop }));
+  const c = cashRows().filter(x => x.d === d && x.by === name).map(x => ({ at: x.at, label: 'เก็บเงินสด', detail: x.method + (x.who && x.who !== name ? ' · ' + x.who : ''), amt: x.amt, shop: x.shop }));
+  return a.concat(c).sort((p, q) => p.at < q.at ? 1 : p.at > q.at ? -1 : 0);
+}
 function cashTake(tok, p) {
   const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา กรุณากดเมนูในไลน์ใหม่', rebind: true };
   const reason = clean(p.reason, 60); const key = Object.keys(TAKE_TYPE).find(k => reason.indexOf(k) === 0); if (!key) return { ok: false, msg: 'เลือกเหตุผลก่อน' };
   const type = TAKE_TYPE[key]; const fixed = /\((\d+)\)/.exec(reason); let amt = fixed ? num(fixed[1]) : num(p.amount);
   if (!amt || amt <= 0) return { ok: false, msg: 'ใส่จำนวนเงิน' }; if (amt > 2000) return { ok: false, msg: 'เกิน 2,000 บาท ให้แจ้งปิ๊กบันทึกแทน' };
   const detail = clean(p.detail, 120); if (type === 'ของใช้' && !detail) return { ok: false, msg: 'ระบุว่าซื้ออะไร' };
-  const shopName = clean(p.shop || b.shop, 20); const today = todayBkk();
-  const x = sh(SH_EXP); const row = x.getLastRow() + 1;
-  x.getRange(row, 1, 1, X_LINK).setValues([[today, shopName, type, b.name, amt, detail || reason, b.name, '']]); x.getRange(row, X_FROM).setValue(CASH_FROM); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd');
-  return { ok: true, msg: 'บันทึกแล้ว: ' + type + ' ' + money(amt) + ' บาท (' + shopName + ')' };
+  const shopName = clean(p.shop || b.shop, 20); const today = todayBkk(); const day = ymd(today); const rid = clean(p.rid, 40); const label = TAKE_LABEL[type] || type;
+  const lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    const done = ridGet(rid); if (done) return done;
+    clearMemo();
+    const same = expenseRows().filter(x => x.d === day && x.by === b.name && x.shop === shopName && x.type === type && x.amt === amt && x.from === CASH_FROM);
+    if (same.length && !p.confirm) return { ok: false, dup: true, label, amt, shop: shopName, n: same.length, at: same[same.length - 1].at, msg: 'วันนี้บันทึก ' + label + ' ' + money(amt) + ' บาท ไปแล้ว' };
+    const x = sh(SH_EXP); ensureCols(x, X_AT, { [X_AT]: 'เวลา' }); const row = x.getLastRow() + 1; const at = hm(new Date());
+    x.getRange(row, 1, 1, X_LINK).setValues([[today, shopName, type, b.name, amt, detail || reason, b.name, '']]); x.getRange(row, X_FROM).setValue(CASH_FROM); x.getRange(row, X_DATE).setNumberFormat('yyyy-mm-dd'); x.getRange(row, X_AT).setNumberFormat('@').setValue(at);
+    clearMemo();
+    return ridPut(rid, { ok: true, label, amt, shop: shopName, name: b.name, at, take: true, msg: 'บันทึกแล้ว: ' + type + ' ' + money(amt) + ' บาท (' + shopName + ')', mine: myToday(b.name) });
+  } finally { lock.releaseLock(); }
 }
 
-/* ---------- เก็บเงินสด (รายสัปดาห์) ---------- */
+/* ---------- เก็บเงินสด (ออกจากลิ้นชัก: มีคนมาเก็บ / ฝากเข้าธนาคาร) ----------
+ * ฝากธนาคาร: ต้องแนบ "ใบฝากเงินสดจากตู้" (ATM/CDM) — ระบบอ่านรูปแล้วตรวจ
+ *   ไม่รับ: สลิปลูกค้าที่ส่งเข้าแชทแล้ว · สลิปโอนเงินทั่วไป · ใบฝากใบเดิมที่ลงไปแล้ว · ร้านที่ไม่ฝากธนาคาร (CASH_NO_DEPOSIT)
+ *   รับแต่ติดธง ⚠ ให้ผู้จัดการ/owner ตรวจ (คอลัมน์ J): ยอดบนใบไม่ตรงกับที่พิมพ์ · ไม่ใช่บัญชีของร้าน · อ่านรูปไม่ได้ (OCR อ่านตัวเลขใบตู้พลาดได้ จึงไม่ปฏิเสธ) */
+/** ยอดที่เป็นไปได้บนใบฝาก: ยอดที่อ่านได้ + ผลรวมจากจำนวนธนบัตร (1000X2 500X1 100X5) */
+function depAmounts(text) {
+  const t = String(text || ''); const out = [];
+  (t.match(/\d{1,3}(?:[,.]\d{3})*[.,]\d{2}|\d+\.\d{2}/g) || []).forEach(v => { const n = Number(v.replace(/[,.](?=\d{3})/g, '').replace(',', '.')); if (n > 0) out.push(n); });
+  let sum = 0, k = 0; (t.match(/\b(1000|500|100|50|20)\s*[Xx×]\s*(\d{1,3})\b/g) || []).forEach(m => { const q = /(\d+)\s*[Xx×]\s*(\d+)/.exec(m); sum += +q[1] * +q[2]; k++; });
+  if (k) out.push(sum);
+  return out;
+}
+/** คีย์ใบฝาก = วันที่ + เวลา บนใบ (06/11/69 22:32) */
+function depKey(text) { const m = /(\d{2}\/\d{2}\/\d{2,4})\s+(\d{1,2}:\d{2})/.exec(String(text || '').replace(/\s+/g, ' ')); return m ? m[1] + ' ' + m[2] : ''; }
 function cashCollect(tok, p) {
   const b = barberOf(tok); if (!b) return { ok: false, msg: 'หมดเวลา กรุณากดเมนูในไลน์ใหม่', rebind: true };
   const amt = num(p.amount); if (amt <= 0) return { ok: false, msg: 'ใส่จำนวนเงิน' };
   const method = clean(p.method, 40); const isBank = /ธนาคาร|โอน/.test(method);
-  if (isBank && !p.image) return { ok: false, msg: 'โอนเข้าธนาคารต้องแนบรูปสลิป' };
-  const shopName = clean(p.shop || b.shop, 20); const who = isBank ? b.name : (clean(p.collector, 40) || defaultCollector()); const today = todayBkk();
-  let link = '', img = '';
-  if (p.image) { const f = saveImage(p.image, 'เงินสด ' + ym(today), ymd(today) + ' ' + shopName + ' ' + money(amt), true); if (f) { link = f.url; img = f.img; } }
-  const c = sh(SH_CASH); const row = c.getLastRow() + 1;
-  c.getRange(row, 1, 1, C_LINK).setValues([[today, shopName, method, amt, who, b.name, link]]); c.getRange(row, C_DATE).setNumberFormat('yyyy-mm-dd');
-  return { ok: true, msg: 'บันทึกเก็บเงินสด ' + money(amt) + ' บาท (' + method + ') แล้ว (ขึ้นในแอปแอดมินแล้ว)' };
+  const shopName = clean(p.shop || b.shop, 20); const who = isBank ? b.name : (clean(p.collector, 40) || defaultCollector()); const today = todayBkk(); const day = ymd(today); const rid = clean(p.rid, 40);
+  if (isBank && CASH_NO_DEPOSIT.includes(shopName)) return { ok: false, msg: 'ร้าน' + shopName + 'ไม่ฝากเงินสดเข้าธนาคาร — เลือก "มีคนมาเก็บเงินสด"' };
+  if (isBank && !p.image) return { ok: false, msg: 'ฝากเข้าธนาคารต้องแนบรูปใบฝากเงินสด' };
+  const done0 = ridGet(rid); if (done0) return done0;
+  // ---- ตรวจรูปใบฝาก (OCR นอกล็อก) ----
+  let chk = '', dkey = '';
+  if (isBank) {
+    const m = /^data:(image\/\w+);base64,(.+)$/.exec(String(p.image || '')); let text = '';
+    if (m) try { text = ocrText(Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], 'dep.jpg')); } catch (e) {}
+    const ps = parseSlip(text);
+    if (text && !isDepositSlip(text)) {
+      const k = slipKey(ps); const twin = slipRows(x => slipCounted(x) && ((ps.ref && sameSlip(x, ps.ref, ps.amount)) || (k && x.key === k)))[0];
+      if (twin) return { ok: false, msg: 'รูปนี้คือสลิปลูกค้าที่ส่งเข้าแชทแล้ว (' + twin.name + ' ' + twin.d.slice(5) + ' ' + money(twin.amount) + ' บาท) — ไม่ใช่ใบฝากเงินสด\nสลิปลูกค้าส่งในแชทอย่างเดียว ไม่ต้องลงเมนูนี้' };
+      if (isSlipText(text, ps)) return { ok: false, msg: 'รูปนี้เป็นสลิปโอนเงิน ไม่ใช่ใบฝากเงินสดจากตู้\nเมนูนี้ใช้เมื่อนำเงินสดในลิ้นชักไปฝากเท่านั้น — สลิปลูกค้าส่งในแชท' };
+      chk = '⚠ อ่านไม่ออกว่าเป็นใบฝากเงินสด';
+    } else if (!text) chk = '⚠ อ่านรูปไม่ได้';
+    else {
+      dkey = depKey(text); const warn = [];
+      const am = depAmounts(text); if (!am.includes(amt)) warn.push('ยอดบนใบ ' + (am.length ? am.map(money).join('/') : 'อ่านไม่ได้') + ' ≠ ที่ลง ' + money(amt));
+      const ac = (payCfg().shops[shopName] || {}).acct || ''; if (ac.length >= 3 && !new RegExp(ac.slice(-3) + '(?!\\d)').test(text)) warn.push('ไม่พบเลขบัญชีร้าน (…' + ac.slice(-3) + ') บนใบ');
+      chk = warn.length ? '⚠ ' + warn.join(' · ') : 'ok';
+    }
+  }
+  const lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    const done = ridGet(rid); if (done) return done;
+    clearMemo(); const all = cashRows();
+    if (dkey) { const used = all.find(x => x.key === dkey); if (used) return { ok: false, msg: 'ใบฝากนี้ลงไปแล้ว (' + used.shop + ' ' + used.d.slice(5) + ' ' + money(used.amt) + ' บาท โดย ' + used.by + ')' }; }
+    const same = all.filter(x => x.d === day && x.by === b.name && x.shop === shopName && x.method === method && x.amt === amt);
+    if (same.length && !p.confirm) return { ok: false, dup: true, label: 'เก็บเงินสด', amt, shop: shopName, n: same.length, at: same[same.length - 1].at, msg: 'วันนี้บันทึกเก็บเงินสด ' + money(amt) + ' บาท ไปแล้ว' };
+    let link = '';
+    if (p.image) { const f = saveImage(p.image, 'เงินสด ' + ym(today), day + ' ' + shopName + ' ' + money(amt), true); if (f) link = f.url; }
+    const c = sh(SH_CASH); ensureCols(c, C_KEY, { [C_AT]: 'เวลา', [C_CHK]: 'ตรวจใบฝาก', [C_KEY]: 'คีย์ใบฝาก' }); const row = c.getLastRow() + 1; const at = hm(new Date());
+    c.getRange(row, 1, 1, C_LINK).setValues([[today, shopName, method, amt, who, b.name, link]]); c.getRange(row, C_DATE).setNumberFormat('yyyy-mm-dd');
+    c.getRange(row, C_AT, 1, 3).setNumberFormat('@').setValues([[at, chk, dkey]]);
+    clearMemo();
+    return ridPut(rid, { ok: true, label: 'เก็บเงินสด', amt, shop: shopName, name: b.name, at, detail: isBank ? 'ฝากเข้าธนาคาร' : who + ' มาเก็บ', warn: /^⚠/.test(chk) ? chk.slice(2) : '', msg: 'บันทึกเก็บเงินสด ' + money(amt) + ' บาท (' + method + ') แล้ว', mine: myToday(b.name) });
+  } finally { lock.releaseLock(); }
 }
 
 /* ---------- สลิป / สรุปของฉัน ---------- */
