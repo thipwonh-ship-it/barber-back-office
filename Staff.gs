@@ -64,7 +64,9 @@ function punch(tok, action, p) {
       if (x.r[T_OUT - 1] !== '') return { ok: false, msg: 'ลงเวลาเลิกงานแล้วเมื่อ ' + tStr(x.r[T_OUT - 1]) + ' น.' };
       t.getRange(x.row, T_OUT).setValue(timeText); t.getRange(x.row, T_GPSOUT).setValue(gps);
       if (area === 'นอกพื้นที่') { const o = String(t.getRange(x.row, T_NOTE).getValue()); t.getRange(x.row, T_NOTE).setValue((o ? o + ' | ' : '') + 'เลิกงานนอกพื้นที่ ' + dist + ' ม.'); }
-      return { ok: true, msg: 'บันทึกเลิกงาน ' + timeText + ' น. ขอบคุณค่ะ 🙏', today: todayStatus(b.name) };
+      const res = { ok: true, msg: 'บันทึกเลิกงาน ' + timeText + ' น. ขอบคุณค่ะ 🙏', today: todayStatus(b.name) };
+      try { closeNudge(); } catch (e) {} // ช่างคนสุดท้ายเลิกงาน + ส่งสมุดครบ → เตือน manager ปิดยอด
+      return res;
     }
     return { ok: false, msg: 'action ไม่ถูกต้อง' };
   } finally { lock.releaseLock(); }
@@ -446,6 +448,7 @@ function noteIntake(uid, text) {
     if (p.customers != null && p.newC != null && p.newC + p.regC !== p.customers) warn.push('บอกลูกค้า ' + p.customers + ' คน แต่แยกรายคนได้ ' + (p.newC + p.regC) + ' คน');
     s.getRange(row, 1, 1, 11).setValues([[parseYmd(day), b.name, shop, p.cash == null ? '' : p.cash, p.customers == null ? '' : p.customers, clean(text, 1500), hm(now), warn.join(' · '), p.newC == null ? '' : p.newC, p.regC == null ? '' : p.regC, p.sources.join(', ')]]); s.getRange(row, 1).setNumberFormat('yyyy-mm-dd');
   } finally { lock.releaseLock(); }
+  try { closeNudge(); } catch (e) {}
   return '📝 รับสรุปร้าน' + shop + ' ' + day + (p.cash != null ? '\n💵 เงินสดนับได้ ' + money(p.cash) + ' บาท' + (p.sum != null && !p.mismatch ? ' ✓' : '') : '') + (p.customers != null ? '\n👥 ลูกค้า ' + p.customers + ' คน' + (p.newC != null ? ' (ใหม่ ' + p.newC + ' · ประจำ ' + p.regC + ')' : '') : '') + (p.sources.length ? '\n📍 ลูกค้าใหม่มาจาก: ' + p.sources.join(', ') : '') +
     (warn.length ? '\n⚠️ ' + warn.join('\n⚠️ ') + ' — เช็กแล้วส่งใหม่ได้เลย (ระบบใช้ข้อความล่าสุด)' : '');
 }

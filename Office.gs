@@ -7,7 +7,7 @@ function officeApi(a, p) {
     case 'month': return monthData(p.ym, a);
     case 'daily_get': return dailyGet(p.date, p.shop);
     case 'daily_save': { let cv = null; if ('count' in p) { cv = countValidate(p); if (!cv.ok) return cv; } // เงินสดนับได้: บังคับกรอก · ไม่ตรงต้องมีเหตุผล (ตรวจก่อนบันทึก ไม่ให้ค้างครึ่งทาง)
-      const r = dailySave(a, p); if (r.ok && cv && cv.amount != null) { const c = countSave(a, p.date, clean(p.shop, 20), cv.amount, cv.diff, cv.diff ? clean(p.reason, 200) : ''); if (!c.ok) r.msg += ' · ' + c.msg; clearMemo(); r.data = dailyGet(p.date, clean(p.shop, 20)); if (cv.diff) { r.msg += ' · เงินสด' + (cv.diff < 0 ? 'ขาด ' : 'เกิน ') + money(Math.abs(cv.diff)) + ' — แจ้ง owner แล้ว'; try { pushAdmins('⚠️ เงินสดลิ้นชัก' + clean(p.shop, 20) + ' ' + p.date + ' ไม่ตรง\nนับได้ ' + money(cv.amount) + ' / ควรมี ' + money(cv.exp) + ' → ' + (cv.diff < 0 ? 'ขาด ' : 'เกิน ') + money(Math.abs(cv.diff)) + '\nเหตุผล (' + a.name + '): ' + clean(p.reason, 200) + '\nเปิดแอป › กรอกยอด เพื่อดูรูปสมุด + รับทราบ', ['owner'], null, true); } catch (e) {} } }
+      const r = dailySave(a, p); if (r.ok && cv && cv.amount != null) { const c = countSave(a, p.date, clean(p.shop, 20), cv.amount, cv.diff, cv.diff ? clean(p.reason, 200) : ''); if (!c.ok) r.msg += ' · ' + c.msg; clearMemo(); r.data = dailyGet(p.date, clean(p.shop, 20)); if (cv.diff) r.msg += ' · เงินสด' + (cv.diff < 0 ? 'ขาด ' : 'เกิน ') + money(Math.abs(cv.diff)) + ' — ขึ้นในกล่อง "ต้องดู" ให้ owner รับทราบ'; } // ไม่ส่งไลน์หา owner (owner สั่ง 24 พ.ย. — เข้าไปดูเอง)
       return r; }
     case 'count_ack': if (!owner) return deny(); { const c = countRows().find(x => x.row === num(p.row)); if (!c) return { ok: false, msg: 'ไม่พบรายการ' }; countSheet().getRange(c.row, 9).setValue(a.name + ' ' + nowText()); clearMemo(); return { ok: true, msg: 'รับทราบแล้ว', data: dailyGet(c.d, c.shop) }; }
     case 'expense_add': return expenseAdd(a, p);
@@ -393,18 +393,38 @@ function countSave(a, dateStr, shop, amt, diff, reason) {
   if (old) s.getRange(old.row, 1, 1, 9).setValues(vals); else s.getRange(s.getLastRow() + 1, 1, 1, 9).setValues(vals);
   clearMemo(); return { ok: true };
 }
-/** เตือน manager ทางไลน์ให้ปิดยอดของวันนี้ — ตั้ง time trigger รายวัน (เช่น 22:30) ให้เรียกฟังก์ชันนี้
- *  ส่งเฉพาะวันที่ยังปิดไม่ครบ: ร้านที่มีช่างกดเข้างานวันนี้ แต่ยังไม่กรอกยอด หรือยังไม่กรอกเงินสดนับได้ · ปิดครบแล้วไม่ส่ง (ไม่เสียโควตา push)
- *  คืนข้อความที่ส่ง ('' = ไม่ต้องส่ง) — dry = true ใช้ทดสอบ ไม่ส่งไลน์ */
-function closeRemind(dry) {
-  const day = ymd(todayBkk()); const S = shops().map(s => s.name); const tin = timeRows(r => r.d === day && !!r.tin), dr = dailyRows(r => r.d === day); const lines = [];
+/* ---------- เตือน manager ทางไลน์ให้ปิดยอดของวันนี้ (วันละไม่เกิน 1 ข้อความ) ----------
+ * (1) closeNudge(): เรียกทุกครั้งที่ช่างกดเลิกงาน / ส่งรูปเข้า OA / ส่งข้อความสรุปร้าน → เมื่อ "ช่างส่งยอดครบทุกร้าน" ส่งทันที
+ *     ครบ = ช่างที่เข้างานวันนี้กดเลิกงานครบทุกคน และทุกร้านที่เปิดมีรูปสมุด (หรือข้อความสรุปร้าน)
+ * (2) closeRemind(): สำรองด้วย time trigger รายวัน (เผื่อช่างลืมกดเลิกงาน/ลืมส่งสมุด) — ส่งเฉพาะเมื่อยังไม่เคยเตือนวันนี้
+ * ทั้งสองแบบ: manager ปิดครบแล้ว (กรอกยอด + เงินสดนับได้ ทุกร้านที่เปิด) = ไม่ส่ง */
+function closePending(day) {
+  const S = shops().map(s => s.name); const tin = timeRows(r => r.d === day && !!r.tin), dr = dailyRows(r => r.d === day); const lines = [];
   S.forEach(s => { if (!tin.some(r => r.shop === s) && !dr.some(r => r.shop === s)) return; // ร้านปิด/ไม่มีคนเข้างาน
     if (!dr.some(r => r.shop === s)) lines.push('• ' + s + ': ยังไม่กรอกยอด'); else if (countInfo(day, s).amount == null) lines.push('• ' + s + ': ยังไม่กรอกเงินสดนับได้'); });
-  if (!lines.length) return '';
-  const text = '⏰ กรุณาปิดยอดของวันนี้ (' + day.slice(8) + '/' + day.slice(5, 7) + ')\n' + lines.join('\n') + '\nเปิดแอป › บันทึก › กรอกยอด';
-  if (dry !== true) pushAdmins(text, ['office'], null, true);
+  return lines;
+}
+function allSent(day) {
+  const tin = timeRows(r => r.d === day && !!r.tin); if (!tin.length || tin.some(r => !r.tout)) return false;
+  const open = []; tin.forEach(r => { if (!open.includes(r.shop)) open.push(r.shop); });
+  const bk = slipRows(x => x.d === day && x.note === 'สมุด'); let nt = []; try { nt = noteRows(x => x.d === day); } catch (e) {}
+  return open.every(s => bk.some(x => x.shop === s) || nt.some(x => x.shop === s));
+}
+/** ส่งข้อความเตือน (ถ้ายังไม่เคยส่งวันนี้ และยังปิดไม่ครบ) → คืนข้อความที่ส่ง · dry = true ไม่ส่งจริง ไม่ตั้งธง */
+function closeRemind(dry, head) {
+  const day = ymd(todayBkk()); const c = CacheService.getScriptCache(), key = 'closeRem_' + day; if (dry !== true && c.get(key)) return '';
+  const lines = closePending(day); if (!lines.length) return '';
+  const text = '⏰ ' + (head || 'กรุณาปิดยอดของวันนี้') + ' (' + day.slice(8) + '/' + day.slice(5, 7) + ')\n' + lines.join('\n') + '\nเปิดแอป › บันทึก › กรอกยอด';
+  if (dry !== true) { c.put(key, '1', 21600); pushAdmins(text, ['office'], null, true); }
   return text;
 }
+function closeNudge() {
+  const day = ymd(todayBkk()); try { if (CacheService.getScriptCache().get('closeRem_' + day)) return; } catch (e) {}
+  clearMemo(); if (!allSent(day)) return;
+  const lock = LockService.getScriptLock(); if (!lock.tryLock(5000)) return;
+  try { closeRemind(false, 'ช่างส่งยอดครบทุกร้านแล้ว — กรุณาปิดยอดของวันนี้'); } finally { lock.releaseLock(); }
+}
+
 /** owner ยืนยันเงินสดที่มีคนมาเก็บ: ใส่ยอดที่ได้รับจริง → เก็บผลที่ เงินสด คอลัมน์ J (รับ … / ⚠ …) · ไม่ตรง = ไลน์แจ้ง manager */
 function cashRecv(a, p) {
   const r = cashRows().find(x => x.row === num(p.row)); if (!r || /ธนาคาร|โอน/.test(r.method)) return { ok: false, msg: 'ไม่พบรายการ' };
