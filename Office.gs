@@ -6,7 +6,10 @@ function officeApi(a, p) {
     case 'today': return todayData(p.date);
     case 'month': return monthData(p.ym, a);
     case 'daily_get': return dailyGet(p.date, p.shop);
-    case 'daily_save': { const r = dailySave(a, p); if (r.ok && p.count != null && String(p.count).trim() !== '') { const c = countSave(a, p.date, clean(p.shop, 20), p.count); if (!c.ok) r.msg += ' · ' + c.msg; clearMemo(); r.data = dailyGet(p.date, clean(p.shop, 20)); } return r; }
+    case 'daily_save': { let cv = null; if ('count' in p) { cv = countValidate(p); if (!cv.ok) return cv; } // เงินสดนับได้: บังคับกรอก · ไม่ตรงต้องมีเหตุผล (ตรวจก่อนบันทึก ไม่ให้ค้างครึ่งทาง)
+      const r = dailySave(a, p); if (r.ok && cv && cv.amount != null) { const c = countSave(a, p.date, clean(p.shop, 20), cv.amount, cv.diff, cv.diff ? clean(p.reason, 200) : ''); if (!c.ok) r.msg += ' · ' + c.msg; clearMemo(); r.data = dailyGet(p.date, clean(p.shop, 20)); if (cv.diff) { r.msg += ' · เงินสด' + (cv.diff < 0 ? 'ขาด ' : 'เกิน ') + money(Math.abs(cv.diff)) + ' — แจ้ง owner แล้ว'; try { pushAdmins('⚠️ เงินสดลิ้นชัก' + clean(p.shop, 20) + ' ' + p.date + ' ไม่ตรง\nนับได้ ' + money(cv.amount) + ' / ควรมี ' + money(cv.exp) + ' → ' + (cv.diff < 0 ? 'ขาด ' : 'เกิน ') + money(Math.abs(cv.diff)) + '\nเหตุผล (' + a.name + '): ' + clean(p.reason, 200) + '\nเปิดแอป › กรอกยอด เพื่อดูรูปสมุด + รับทราบ', ['owner'], null, true); } catch (e) {} } }
+      return r; }
+    case 'count_ack': if (!owner) return deny(); { const c = countRows().find(x => x.row === num(p.row)); if (!c) return { ok: false, msg: 'ไม่พบรายการ' }; countSheet().getRange(c.row, 9).setValue(a.name + ' ' + nowText()); clearMemo(); return { ok: true, msg: 'รับทราบแล้ว', data: dailyGet(c.d, c.shop) }; }
     case 'expense_add': return expenseAdd(a, p);
     case 'expense_list': return { ok: true, rows: byDateDesc(expenseRows(p.ym)).slice(0, 200) };
     case 'cash_list': return { ok: true, rows: byDateDesc(cashRows(p.ym)), balance: cashBalance(), confirmFrom: CASH_CONFIRM_FROM };
@@ -146,7 +149,7 @@ const tdm = tipDue(); const td = Object.keys(tdm).map(k => tdm[k]); const late =
   try { const f14 = ymd(new Date(todayBkk().getTime() - 14 * 86400000)); const bad = cashRows().filter(x => x.d >= f14 && /ธนาคาร|โอน/.test(x.method) && /^⚠/.test(x.chk)); if (bad.length) out.push({ t: '🏧 ใบฝากเงินสดต้องตรวจ ' + bad.length + ' ใบ (' + bad.slice(-2).map(x => x.shop + ' ' + x.d.slice(5) + ' ' + money(x.amt)).join(', ') + ')', go: 'pond', b: 'ดู' }); } catch (e) {}
   // 3.3) เงินสดนับได้ (จากสมุด) ไม่ตรงกับที่ระบบควรมี — เตือนเฉพาะวันที่ "เริ่ม" ไม่ตรง · และเมื่อวานยังไม่กรอกยอดนับ
   try { const cr = countRows(); if (cr.length) { const first = cr.reduce((m, x) => x.d < m ? x.d : m, cr[0].d); const f7 = ymd(new Date(todayBkk().getTime() - 7 * 86400000));
-      S.forEach(s => { for (let i = 7; i >= 0; i--) { const dd = ymd(new Date(todayBkk().getTime() - i * 86400000)); if (dd < first || dd < f7) continue; const c = countInfo(dd, s); if (c.amount != null && c.newDiff) out.push({ t: '💵 เงินสดลิ้นชัก' + s + ' ' + dd.slice(5) + ' ' + (c.newDiff < 0 ? 'ขาด ' : 'เกิน ') + money(Math.abs(c.newDiff)) + ' (นับได้ ' + money(c.amount) + ' / ควรมี ' + money(c.bal) + ')', go: 'daily', b: 'ดู', d: dd, shop: s }); } });
+      S.forEach(s => { for (let i = 7; i >= 0; i--) { const dd = ymd(new Date(todayBkk().getTime() - i * 86400000)); if (dd < first || dd < f7) continue; const c = countInfo(dd, s); if (c.amount != null && c.newDiff && !c.ack) out.push({ t: '💵 เงินสดลิ้นชัก' + s + ' ' + dd.slice(5) + ' ' + (c.newDiff < 0 ? 'ขาด ' : 'เกิน ') + money(Math.abs(c.newDiff)) + ' (นับได้ ' + money(c.amount) + ' / ควรมี ' + money(c.exp) + ')' + (c.reason ? ' — ' + c.reason : ''), go: 'daily', b: 'ดู', d: dd, shop: s }); } });
       if (y >= first) { const dy = dailyRows(r => r.d === y); const miss = S.filter(s => dy.some(r => r.shop === s) && countInfo(y, s).amount == null); if (miss.length) out.push({ t: '✏️ ยังไม่กรอกเงินสดนับได้ ' + y.slice(5) + ': ' + miss.join(', '), go: 'daily', b: 'กรอก', d: y, shop: miss[0] }); } } } catch (e) {}
   // 3.35) เงินสดที่มีคนมาเก็บ — รอ owner ยืนยันว่าได้รับ (เฉพาะ owner เห็น) · ที่ได้รับไม่ตรง เห็นทั้งคู่
   try { const cc = cashRows().filter(x => x.d >= CASH_CONFIRM_FROM && !/ธนาคาร|โอน/.test(x.method));
@@ -354,25 +357,53 @@ function barberSave(p) {
  * เทียบ: ระบบควรมี ณ สิ้นวัน = cashBalance(วันนั้น) · newDiff = ส่วนต่างที่ "เพิ่มขึ้นจากครั้งนับก่อนหน้า" → ชี้วันที่เริ่มไม่ตรง
  * จับได้: เงินออกจากลิ้นชักโดยไม่มีรายการ / มีรายการแต่เงินไม่ออก · จับไม่ได้: ช่างรับเงินสดแล้วไม่เขียนลงสมุดเลย (ใช้จำนวนหัวจากกล้องเทียบ) */
 const SH_COUNT = 'นับเงินสด';
-function countSheet() { let s = ss().getSheetByName(SH_COUNT); if (s) return s; s = ss().insertSheet(SH_COUNT); s.getRange('A1:F1').setValues([['วันที่', 'ร้าน', 'เงินสดนับได้', 'ระบบควรมีตอนกรอก', 'ผู้กรอก', 'เวลา']]).setFontWeight('bold'); s.setFrozenRows(1); s.getRange('A:A').setNumberFormat('yyyy-mm-dd'); s.getRange('C:D').setNumberFormat('#,##0'); return s; }
-function countRows() { return memoRead('count', () => { const s = ss().getSheetByName(SH_COUNT); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 6).getValues(); }).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[1]).trim(), amount: r[2] === '' ? null : num(r[2]), by: String(r[4] || ''), at: String(r[5] || '') })).filter(x => x.d && x.amount != null); }
+// A วันที่ B ร้าน C นับได้ D ระบบควรมีตอนกรอก E ผู้กรอก F เวลา G ส่วนต่างของวันนั้น H เหตุผล (เมื่อบันทึกทั้งที่ไม่ตรง) I owner รับทราบ
+function countSheet() { let s = ss().getSheetByName(SH_COUNT); if (s) return s; s = ss().insertSheet(SH_COUNT); s.getRange('A1:I1').setValues([['วันที่', 'ร้าน', 'เงินสดนับได้', 'ระบบควรมีตอนกรอก', 'ผู้กรอก', 'เวลา', 'ส่วนต่าง', 'เหตุผล', 'owner รับทราบ']]).setFontWeight('bold'); s.setFrozenRows(1); s.getRange('A:A').setNumberFormat('yyyy-mm-dd'); s.getRange('C:D').setNumberFormat('#,##0'); s.getRange('G:G').setNumberFormat('#,##0'); return s; }
+function countRows() { return memoRead('count', () => { const s = ss().getSheetByName(SH_COUNT); if (!s || s.getLastRow() < 2) return []; return s.getRange(2, 1, s.getLastRow() - 1, 9).getValues(); }).map((r, i) => ({ row: i + 2, d: dateKey(r[0]), shop: String(r[1]).trim(), amount: r[2] === '' ? null : num(r[2]), by: String(r[4] || ''), at: String(r[5] || ''), reason: String(r[7] || ''), ack: String(r[8] || '') })).filter(x => x.d && x.amount != null); }
 /** ยอดนับของ วัน/ร้าน: ที่ manager กรอก → ไม่มีก็ใช้ยอดจากข้อความสรุปร้าน (Kraft) */
-function countOf(day, shop) { const m = countRows().filter(x => x.d === day && x.shop === shop).pop(); if (m) return { amount: m.amount, by: m.by, src: 'manager' }; let n = null; try { n = noteRows(x => x.d === day && x.shop === shop && x.cash != null)[0]; } catch (e) {} return n ? { amount: n.cash, by: n.name, src: 'สรุปร้าน' } : null; }
+function countOf(day, shop) { const m = countRows().filter(x => x.d === day && x.shop === shop).pop(); if (m) return { amount: m.amount, by: m.by, src: 'manager', reason: m.reason, ack: m.ack, row: m.row }; let n = null; try { n = noteRows(x => x.d === day && x.shop === shop && x.cash != null)[0]; } catch (e) {} return n ? { amount: n.cash, by: n.name, src: 'สรุปร้าน', reason: '', ack: '', row: 0 } : null; }
+/** ยอดที่ควรมี ณ สิ้นวัน = cashBalance(วันนั้น) + carry · carry = ส่วนต่างของครั้งนับก่อนหน้าที่ยังไม่ได้แก้ → วันใหม่เริ่มเทียบจากยอดนับจริงครั้งก่อน ไม่สะสม */
 function countInfo(day, shop) {
   const bal = (cashBalance(day)[shop] || {}).balance; const sp = shops().find(s => s.name === shop) || {}; const on = r => r.shop === shop && r.d === day && r.d >= (sp.cashFrom || '');
   const inC = dailyRows(on).reduce((a, r) => a + r.cash, 0), takes = expenseRows().filter(r => on(r) && r.from === CASH_FROM), outC = takes.reduce((a, r) => a + r.amt, 0), coll = cashRows().filter(on).reduce((a, r) => a + r.amt, 0);
-  const o = { bal, prev: bal == null ? null : bal - inC + outC + coll, in: inC, out: outC, coll, takes: takes.map(r => ({ type: r.type, name: r.name, amt: r.amt })), amount: null, by: '', src: '', diff: null, newDiff: null, prevD: '' };
-  const c = countOf(day, shop); if (!c || bal == null) return o; o.amount = c.amount; o.by = c.by; o.src = c.src; o.diff = c.amount - bal;
-  // ครั้งนับก่อนหน้า (ย้อนไม่เกิน 14 วัน) → ส่วนต่างเดิมที่ยังไม่ได้แก้
-  let pd = 0; for (let i = 1; i <= 14; i++) { const d0 = ymd(new Date(parseYmd(day).getTime() - i * 86400000)); if (sp.cashFrom && d0 < sp.cashFrom) break; const p = countOf(d0, shop); if (p) { pd = p.amount - (cashBalance(d0)[shop] || {}).balance; o.prevD = d0; break; } }
-  o.newDiff = o.diff - pd; return o;
+  const o = { bal, carry: 0, exp: bal, prev: null, in: inC, out: outC, coll, takes: takes.map(r => ({ type: r.type, name: r.name, amt: r.amt })), amount: null, by: '', src: '', diff: null, newDiff: null, prevD: '', reason: '', ack: '', row: 0, on: !(sp.cashFrom && day < sp.cashFrom) };
+  if (bal == null) return o;
+  for (let i = 1; i <= 14; i++) { const d0 = ymd(new Date(parseYmd(day).getTime() - i * 86400000)); if (sp.cashFrom && d0 < sp.cashFrom) break; const p = countOf(d0, shop); if (p) { o.carry = p.amount - (cashBalance(d0)[shop] || {}).balance; o.prevD = d0; break; } }
+  o.exp = bal + o.carry; o.prev = o.exp - inC + outC + coll;
+  const c = countOf(day, shop); if (!c) return o; o.amount = c.amount; o.by = c.by; o.src = c.src; o.reason = c.reason; o.ack = c.ack; o.row = c.row; o.diff = c.amount - bal; o.newDiff = c.amount - o.exp; return o;
 }
-function countSave(a, dateStr, shop, v) {
-  const day = parseYmd(dateStr); if (!day) return { ok: false, msg: 'วันที่ไม่ถูกต้อง' }; const amt = Number(String(v).replace(/,/g, '')); if (!isFinite(amt) || amt < 0) return { ok: false, msg: 'เงินสดนับได้ไม่ถูกต้อง' };
-  const s = countSheet(); clearMemo(); const old = countRows().filter(x => x.d === ymd(day) && x.shop === shop).pop(); const exp = (cashBalance(ymd(day))[shop] || {}).balance;
-  const vals = [[day, shop, amt, exp == null ? '' : exp, a.name, nowText()]];
-  if (old) s.getRange(old.row, 1, 1, 6).setValues(vals); else s.getRange(s.getLastRow() + 1, 1, 1, 6).setValues(vals);
+/** ตรวจก่อนบันทึกยอดรายวัน: มียอดของวันนั้นต้องใส่เงินสดนับได้ · ไม่ตรงกับที่ควรมี (คิดจากเงินสดที่กำลังจะบันทึก) ต้องมีเหตุผล → { ok, amount, exp, diff } */
+function countValidate(p) {
+  const day = String(p.date || ''), shop = clean(p.shop, 20); if (!parseYmd(day)) return { ok: false, msg: 'วันที่ไม่ถูกต้อง' };
+  const rows = (p.rows || []).filter(r => clean(r.name, 30)); const has = rows.some(r => String(r.heads) !== '' || String(r.cash) !== '' || String(r.transfer) !== '');
+  const v = String(p.count == null ? '' : p.count).replace(/,/g, '').trim();
+  if (v === '') return has ? { ok: false, needCount: true, msg: 'ใส่ "เงินสดนับได้" (ยอดนับท้ายหน้าสมุด) ก่อนบันทึก' } : { ok: true, amount: null };
+  const amt = Number(v); if (!isFinite(amt) || amt < 0) return { ok: false, msg: 'เงินสดนับได้ไม่ถูกต้อง' };
+  const C = countInfo(day, shop); if (C.bal == null || !C.on) return { ok: true, amount: amt, exp: amt, diff: 0 };
+  const names = rows.map(r => clean(r.name, 30)); const keep = dailyRows(r => r.d === day && r.shop === shop && !names.includes(r.name)).reduce((a, r) => a + r.cash, 0);
+  const inNew = keep + rows.reduce((a, r) => a + num(r.cash), 0); const exp = C.exp - C.in + inNew; const diff = amt - exp;
+  if (diff && !clean(p.reason, 200)) return { ok: false, needReason: true, exp, diff, msg: 'เงินสดนับได้ ' + money(amt) + ' ไม่ตรงกับที่ควรมี ' + money(exp) + ' (' + (diff < 0 ? 'ขาด ' : 'เกิน ') + money(Math.abs(diff)) + ') — แก้ให้ตรง หรือใส่เหตุผลแล้วบันทึก' };
+  return { ok: true, amount: amt, exp, diff };
+}
+function countSave(a, dateStr, shop, amt, diff, reason) {
+  const day = parseYmd(dateStr); if (!day) return { ok: false, msg: 'วันที่ไม่ถูกต้อง' };
+  const s = countSheet(); if (s.getMaxColumns() < 9) s.insertColumnsAfter(s.getMaxColumns(), 9 - s.getMaxColumns()); clearMemo(); const old = countRows().filter(x => x.d === ymd(day) && x.shop === shop).pop(); const exp = (cashBalance(ymd(day))[shop] || {}).balance;
+  const keepAck = old && old.ack && old.amount === amt && old.reason === (reason || '') ? old.ack : ''; // แก้ยอด/เหตุผล = owner ต้องรับทราบใหม่
+  const vals = [[day, shop, amt, exp == null ? '' : exp, a.name, nowText(), diff || 0, reason || '', keepAck]];
+  if (old) s.getRange(old.row, 1, 1, 9).setValues(vals); else s.getRange(s.getLastRow() + 1, 1, 1, 9).setValues(vals);
   clearMemo(); return { ok: true };
+}
+/** เตือน manager ทางไลน์ให้ปิดยอดของวันนี้ — ตั้ง time trigger รายวัน (เช่น 22:30) ให้เรียกฟังก์ชันนี้
+ *  ส่งเฉพาะวันที่ยังปิดไม่ครบ: ร้านที่มีช่างกดเข้างานวันนี้ แต่ยังไม่กรอกยอด หรือยังไม่กรอกเงินสดนับได้ · ปิดครบแล้วไม่ส่ง (ไม่เสียโควตา push)
+ *  คืนข้อความที่ส่ง ('' = ไม่ต้องส่ง) — dry = true ใช้ทดสอบ ไม่ส่งไลน์ */
+function closeRemind(dry) {
+  const day = ymd(todayBkk()); const S = shops().map(s => s.name); const tin = timeRows(r => r.d === day && !!r.tin), dr = dailyRows(r => r.d === day); const lines = [];
+  S.forEach(s => { if (!tin.some(r => r.shop === s) && !dr.some(r => r.shop === s)) return; // ร้านปิด/ไม่มีคนเข้างาน
+    if (!dr.some(r => r.shop === s)) lines.push('• ' + s + ': ยังไม่กรอกยอด'); else if (countInfo(day, s).amount == null) lines.push('• ' + s + ': ยังไม่กรอกเงินสดนับได้'); });
+  if (!lines.length) return '';
+  const text = '⏰ กรุณาปิดยอดของวันนี้ (' + day.slice(8) + '/' + day.slice(5, 7) + ')\n' + lines.join('\n') + '\nเปิดแอป › บันทึก › กรอกยอด';
+  if (dry !== true) pushAdmins(text, ['office'], null, true);
+  return text;
 }
 /** owner ยืนยันเงินสดที่มีคนมาเก็บ: ใส่ยอดที่ได้รับจริง → เก็บผลที่ เงินสด คอลัมน์ J (รับ … / ⚠ …) · ไม่ตรง = ไลน์แจ้ง manager */
 function cashRecv(a, p) {
