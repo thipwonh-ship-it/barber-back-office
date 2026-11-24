@@ -140,6 +140,8 @@ function alertList(day) {
 const tdm = tipDue(); const td = Object.keys(tdm).map(k => tdm[k]); const late = td.filter(o => o.overdue > 0), over = td.filter(o => o.over > 0);
     if (late.length) out.push({ t: '💵 ทิปค้างหยิบเกิน 1 วัน: ' + late.map(o => o.name + ' ' + money(o.overdue)).join(', ') + ' — ให้ช่างหยิบ + กดเมนูทิป', go: 'daily', b: 'ดู' });
     if (over.length) out.push({ t: '💵 ช่างกดหยิบทิปเกินที่กรอก: ' + over.map(o => o.name + ' ' + money(o.over)).join(', '), go: 'daily', b: 'ดู' }); } catch (e) {}
+  // 3.5) เงินสดลิ้นชักเกินกำหนด (CASH_MAX) → ให้ช่างนำฝากธนาคาร แล้วลงเมนู เก็บเงินสด › โอนเข้าธนาคาร · เห็นทั้ง owner และ manager
+  try { const cb = cashBalance(); Object.keys(CASH_MAX).forEach(s => { const b = cb[s] ? num(cb[s].balance) : 0; if (b > CASH_MAX[s]) out.push({ t: '💵 เงินสดลิ้นชัก' + s + ' ' + money(b) + ' (เกิน ' + money(CASH_MAX[s]) + ') — ให้ช่างนำฝากธนาคาร + ลงเมนู เก็บเงินสด', go: 'pond', b: 'ดู' }); }); } catch (e) {}
   // 4) ช่างลืมกดเลิกงาน (เมื่อวาน)
   const noOut = timeRows(r => r.d === y && !!r.tin && !r.tout).map(r => r.name); if (noOut.length) out.push({ t: '🕗 ไม่ได้กดเลิกงาน ' + y.slice(5) + ': ' + noOut.join(', ') });
   return out;
@@ -353,7 +355,8 @@ const BANK_GIVE = 'ส่วนตัว: ให้', BANK_ADV = 'ส่วน�
 const BANK_OTHER = [BANK_GIVE, BANK_ADV, 'ส่งเงินให้ owner', 'ส่วนตัว (ไม่ใช่ร้าน)'];
 // ประเภทเพิ่มเฉพาะบัญชีผู้จัดการ (ค่าใช้จ่ายร้าน) → ลงแผ่นรายจ่ายเป็น อื่นๆ (P&L มีคอลัมน์ตายตัว) รายละเอียดขึ้นต้นด้วยชื่อประเภท
 const BANK_EXTRA = { 'ค่าน้ำมัน': 'อื่นๆ', 'ค่าทางด่วน': 'อื่นๆ' };
-const FLOAT_LOW = 700; // วงเงินสำรองเหลือต่ำกว่านี้ → เตือน owner ให้เติม
+const FLOAT_LOW = 700;
+const CASH_MAX = { 'โลตัส': 2000 }; // เงินสดลิ้นชักต่อร้านที่ยอมให้ค้าง — เกินนี้เตือนให้นำฝาก (ราม: ดีนเข้าไปเก็บ · Kraft: owner เก็บ จึงไม่ตั้ง) // วงเงินสำรองเหลือต่ำกว่านี้ → เตือน owner ให้เติม
 function bankSheet() {
   let s = ss().getSheetByName(SH_BANK); if (s) return s;
   s = ss().insertSheet(SH_BANK); s.getRange('A1:M1').setValues([['รหัส', 'วันที่', 'ชนิด', 'ประเภท', 'ร้าน', 'ช่าง', 'จำนวน', 'รายละเอียด', 'สถานะ', 'ผู้บันทึก', 'บันทึกเมื่อ', 'ลิงก์สลิป', 'ยอดควรมีตอนกรอก']]).setFontWeight('bold'); s.setFrozenRows(1);
