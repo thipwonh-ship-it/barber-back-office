@@ -147,8 +147,8 @@ const tdm = tipDue(); const td = Object.keys(tdm).map(k => tdm[k]); const late =
     if (late.length) out.push({ t: '💵 ทิปค้างหยิบเกิน 1 วัน: ' + late.map(o => o.name + ' ' + money(o.overdue)).join(', ') + ' — ให้ช่างหยิบ + กดเมนูทิป', go: 'daily', b: 'ดู' });
     if (over.length) out.push({ t: '💵 ช่างกดหยิบทิปเกินที่กรอก: ' + over.map(o => o.name + ' ' + money(o.over)).join(', '), go: 'daily', b: 'ดู' }); } catch (e) {}
   // 3.2) ค่าคอมขายผลิตภัณฑ์: ช่างกดหยิบเกินจำนวนชิ้นที่ผู้จัดการกรอก / ค้างหยิบเกิน 1 วัน
-  try { const pd = prodDue(); const ks = Object.keys(pd); const over = ks.filter(k => pd[k].over > 0), late = ks.filter(k => pd[k].overdue > 0 && !pd[k].over);
-    if (over.length) out.push({ t: '🧴 ช่างกดหยิบค่าขายผลิตภัณฑ์เกินรายการขาย: ' + over.map(k => k.split('|')[1] + ' (' + k.split('|')[0] + ') ' + money(pd[k].over)).join(', ') + ' — ตรวจสมุด/กรอกรายการขาย', go: 'daily', b: 'ดู' });
+  try { const pd = prodDue(); const ks = Object.keys(pd); const over = ks.filter(k => pd[k].overOld > 0), late = ks.filter(k => pd[k].overdue > 0 && !pd[k].over);
+    if (over.length) out.push({ t: '🧴 ช่างกดหยิบค่าขายผลิตภัณฑ์เกินรายการขาย: ' + over.map(k => k.split('|')[1] + ' (' + k.split('|')[0] + ') ' + money(pd[k].overOld)).join(', ') + ' — ตรวจสมุด/กรอกรายการขาย แล้วแจ้งช่าง', go: 'daily', b: 'ดู' });
     if (late.length) out.push({ t: '🧴 ค่าคอมขายผลิตภัณฑ์ค้างหยิบเกิน 1 วัน: ' + late.map(k => k.split('|')[1] + ' ' + money(pd[k].overdue)).join(', '), go: 'daily', b: 'ดู' }); } catch (e) {}
   // 3.4) ใบฝากเงินสดที่ระบบตรวจแล้วไม่ผ่าน (ยอดบนใบไม่ตรง / ไม่ใช่บัญชีร้าน / อ่านรูปไม่ได้)
   try { const f14 = ymd(new Date(todayBkk().getTime() - 14 * 86400000)); const bad = cashRows().filter(x => x.d >= f14 && /ธนาคาร|โอน/.test(x.method) && /^⚠/.test(x.chk)); if (bad.length) out.push({ t: '🏧 ใบฝากเงินสดต้องตรวจ ' + bad.length + ' ใบ (' + bad.slice(-2).map(x => x.shop + ' ' + x.d.slice(5) + ' ' + money(x.amt)).join(', ') + ')', go: 'pond', b: 'ดู' }); } catch (e) {}
@@ -691,15 +691,16 @@ function prodRows(filter) { return memoRead('m:prod', () => { const s = ss().get
 function prodComOf(item) { const p = prodList().find(x => x.name === item); return p ? p.com : PROD_COM; }
 /** ค่าคอมค้างหยิบ ต่อร้าน/ช่าง (สะสมตั้งแต่วันเริ่มระบบ) — owed = Σ ชิ้น × ค่าคอม · taken = Σ ที่ช่างกด ขายผลิตภัณฑ์ · skip = วันที่ไม่นับ owed (หน้ากรอกยอดคิดของวันนั้นสดจากหน้าจอ) */
 function prodDue(skipDay) {
-  const cut = ymd(new Date(todayBkk().getTime() - 86400000)); const m = {}, o = k => m[k] = m[k] || { owed: 0, must: 0, taken: 0, day: 0 };
+  const today = ymd(todayBkk()), cut = ymd(new Date(todayBkk().getTime() - 86400000)); const m = {}, o = k => m[k] = m[k] || { owed: 0, must: 0, taken: 0, day: 0, takeDay: 0, takenOld: 0 };
   prodRows().forEach(r => { const x = o(r.shop + '|' + r.name), c = r.qty * prodComOf(r.item); if (r.d === skipDay) x.day += c; else x.owed += c; if (r.d < cut) x.must += c; });
-  expenseRows().forEach(e => { if (e.type === 'ขายผลิตภัณฑ์' && e.name) o(e.shop + '|' + e.name).taken += e.amt; });
-  Object.keys(m).forEach(k => { const x = m[k], all = x.owed + x.day; x.due = all - x.taken; x.overdue = Math.max(0, x.must - x.taken); x.over = Math.max(0, x.taken - all); });
+  expenseRows().forEach(e => { if (e.type !== 'ขายผลิตภัณฑ์' || !e.name) return; const x = o(e.shop + '|' + e.name); x.taken += e.amt; if (e.d === skipDay) x.takeDay += e.amt; if (e.d < today) x.takenOld += e.amt; });
+  // over = ช่างกดหยิบเกินรายการขาย · overOld = นับเฉพาะที่กดก่อนวันนี้ (ที่กดวันนี้รอผู้จัดการกรอกตอนปิดยอดก่อน = เหลือง ยังไม่ขึ้น "ต้องดู" — owner สั่ง 27 พ.ย.)
+  Object.keys(m).forEach(k => { const x = m[k], all = x.owed + x.day; x.due = all - x.taken; x.overdue = Math.max(0, x.must - x.taken); x.over = Math.max(0, x.taken - all); x.overOld = Math.max(0, x.takenOld - all); });
   return m;
 }
 function prodCashOf(day, shop) { return prodRows(r => r.d === day && r.shop === shop && r.cash).reduce((a, r) => a + r.amt, 0); }
 function prodGet(day, shop) {
-  const due = prodDue(day); const com = {}; Object.keys(due).forEach(k => { const [s, n] = k.split('|'); if (s === shop) com[n] = { other: due[k].owed - due[k].taken, overdue: due[k].overdue }; });
+  const due = prodDue(day); const com = {}; Object.keys(due).forEach(k => { const [s, n] = k.split('|'); if (s === shop) com[n] = { other: due[k].owed - (due[k].taken - due[k].takeDay), takeDay: due[k].takeDay, overdue: due[k].overdue }; }); // other = ค้างจากวันอื่น (ไม่รวมที่กดในวันนี้ของหน้า)
   return { list: prodList(), rows: prodRows(r => r.d === day && r.shop === shop).map(r => ({ name: r.name, item: r.item, qty: r.qty, amt: r.amt, cash: r.cash })), com, takeToday: expenseRows().filter(e => e.d === day && e.shop === shop && e.type === 'ขายผลิตภัณฑ์').map(e => ({ name: e.name, amt: e.amt, at: e.at })) };
 }
 /** ตรวจรายการขาย (ก่อนบันทึกอะไรทั้งนั้น) → { ok, items } */

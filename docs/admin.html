@@ -313,10 +313,11 @@ function prodComOf(item){ const p=(DL.prod.list||[]).find(x=>x.name===item); ret
 function prodCalc(init){ if(!$('pdRows')) return; const R=prodRowsDom(), P=DL.prod, per={};
   R.forEach(x=>{ if(x.name) per[x.name]=(per[x.name]||0)+x.qty*prodComOf(x.item); });
   const names=[...new Set(Object.keys(per).concat(Object.keys(P.com||{})).concat((P.takeToday||[]).map(t=>t.name)))];
-  $('pdCom').innerHTML=names.map(nm=>{ const c=(P.com||{})[nm]||{other:0,overdue:0}, today=per[nm]||0, due=c.other+today, q=R.filter(x=>x.name===nm).reduce((a,x)=>a+x.qty,0), tk=(P.takeToday||[]).filter(t=>t.name===nm).reduce((a,t)=>a+t.amt,0);
+  $('pdCom').innerHTML=names.map(nm=>{ const c=(P.com||{})[nm]||{other:0,overdue:0,takeDay:0}, today=per[nm]||0, due=c.other+today-(c.takeDay||0), q=R.filter(x=>x.name===nm).reduce((a,x)=>a+x.qty,0), tk=(P.takeToday||[]).filter(t=>t.name===nm).reduce((a,t)=>a+t.amt,0);
     if(!due&&!today&&!tk) return '';
     if(due===0) return '<div class="slp ok">✓ '+esc(nm)+(q?' ขาย '+q+' ชิ้น → ค่าคอม '+n(today):'')+' · กดหยิบครบแล้ว</div>';
-    if(due<0) return '<div class="slp bad">⚠ '+esc(nm)+' กดหยิบค่าขายผลิตภัณฑ์เกินรายการขาย '+n(-due)+' → ตรวจสมุด / เพิ่มรายการขายที่ขาด</div>';
+    if(due<0&&c.other>=0&&DL.date>=TODAY) return '<div class="slp tck wait">⏳ '+esc(nm)+' กดหยิบค่าคอมวันนี้ '+n(tk)+' · ยังไม่มีรายการขาย '+n(-due)+' → ดูสมุดแล้วกรอกรายการขาย (ถ้าไม่มีในสมุด แจ้งช่าง)</div>'; /* เหลือง: กดวันนี้ รอปิดยอด · เลยวัน = แดง + ขึ้น "ต้องดู" */
+    if(due<0) return '<div class="slp bad">⚠ '+esc(nm)+' กดหยิบค่าขายผลิตภัณฑ์เกินรายการขาย '+n(-due)+' → ตรวจสมุด / เพิ่มรายการขายที่ขาด แล้วแจ้งช่าง</div>';
     return '<div class="slp '+(c.overdue?'bad':'tck wait')+'">'+(c.overdue?'⚠':'⏳')+' '+esc(nm)+(q?' ขาย '+q+' ชิ้น → ค่าคอม '+n(today)+' ·':'')+' รอช่างหยิบ + กดเมนู '+n(due)+(c.overdue?' (ค้างเกิน 1 วัน)':'')+'</div>'; }).join('');
   const tc=prodSum(true), tt=prodSum(false); $('pdTot').innerHTML='<b>'+n(tc+tt)+'</b>'+(tc+tt?' (สด '+n(tc)+' · โอน '+n(tt)+')':'');
   if(!init){ document.querySelectorAll('#dlTable [data-name]').forEach(slipCheck); countCheck(); } }
