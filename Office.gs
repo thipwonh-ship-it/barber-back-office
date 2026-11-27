@@ -79,7 +79,7 @@ function startRow(s, name, last) {
   if (c) try { c.put(key, String(r), 21600); } catch (e) {}
   return r;
 }
-function dailyRows(filter) { return memoRead('m:daily', () => rowsOf(SH_DAILY, D_TIP).map(r => ({ row: r.__row, d: dateKey(r[0]), shop: String(r[D_SHOP - 1]).trim(), name: String(r[D_NAME - 1]).trim(), heads: num(r[D_HEADS - 1]), sales: num(r[D_SALES - 1]), cash: num(r[D_CASH - 1]), transfer: num(r[D_TRANSFER - 1]), calc: num(r[D_CALC - 1]), over: r[D_OVER - 1] === '' ? '' : num(r[D_OVER - 1]), paid: num(r[D_PAID - 1]), note: String(r[D_NOTE - 1] || ''), by: String(r[D_BY - 1] || ''), tip: r[D_TIP - 1] === '' || r[D_TIP - 1] == null ? null : num(r[D_TIP - 1]) }))).filter(x => x.d >= START_DATE && (!filter || filter(x))); }
+function dailyRows(filter) { return memoRead('m:daily', () => rowsOf(SH_DAILY, D_NOCUT).map(r => ({ row: r.__row, d: dateKey(r[0]), shop: String(r[D_SHOP - 1]).trim(), name: String(r[D_NAME - 1]).trim(), heads: num(r[D_HEADS - 1]), sales: num(r[D_SALES - 1]), cash: num(r[D_CASH - 1]), transfer: num(r[D_TRANSFER - 1]), calc: num(r[D_CALC - 1]), over: r[D_OVER - 1] === '' ? '' : num(r[D_OVER - 1]), paid: num(r[D_PAID - 1]), note: String(r[D_NOTE - 1] || ''), by: String(r[D_BY - 1] || ''), tip: r[D_TIP - 1] === '' || r[D_TIP - 1] == null ? null : num(r[D_TIP - 1]), dye: num(r[D_DYE - 1]), chem: num(r[D_CHEM - 1]), nocut: num(r[D_NOCUT - 1]) }))).filter(x => x.d >= START_DATE && (!filter || filter(x))); }
 /** ทิปโอน: ลูกค้าโอนรวมทิปมา ช่างหยิบเงินสดในลิ้นชักคืน — บันทึก 2 ทางแล้วเทียบกัน
  *  (1) ช่างกดเมนู หยิบเงินสด › ทิป → รายจ่าย ทิปช่าง จ่ายจากเงินสดร้าน (หักเงินสดลิ้นชัก) = tipTaken
  *  (2) ผู้จัดการกรอก ทิปโอน ตอนปิดวัน → ยอดรายวัน คอลัมน์ Q (หักออกจากยอดตัด: ยอดขาย = เงินสด + โอนตามสลิป − ทิป · คอลัมน์ โอน เก็บยอดหลังหักทิป)
@@ -211,7 +211,7 @@ function dailyGet(dateStr, shop) {
   const punched = timeRows(r => r.d === day && r.shop === shop && !!r.tin).map(r => r.name); // ไม่นับแถว ลา
   const names = []; punched.concat(ex.map(r => r.name)).forEach(n => { if (!names.includes(n)) names.push(n); });
   const others = barbers(false).map(b => b.name).filter(n => !names.includes(n)); const tdue = tipDue();
-  const rows = names.map(n => { const r = ex.find(e => e.name === n); const b = barberByName(n); return { name: n, main: b && b.shop === shop, punched: punched.includes(n), heads: r ? r.heads : '', sales: r ? r.sales : '', cash: r ? r.cash : '', transfer: r ? r.transfer : '', tip: r ? r.tip : null, due: (tdue[shop + '|' + n] || {}).due || 0, overdue: (tdue[shop + '|' + n] || {}).overdue || 0, calc: r ? r.calc : '', over: r ? r.over : '', paid: r ? r.paid : '', note: r ? r.note : '', exists: !!r }; });
+  const rows = names.map(n => { const r = ex.find(e => e.name === n); const b = barberByName(n); return { name: n, main: b && b.shop === shop, punched: punched.includes(n), heads: r ? r.heads : '', sales: r ? r.sales : '', cash: r ? r.cash : '', transfer: r ? r.transfer : '', tip: r ? r.tip : null, dye: r ? r.dye : 0, chem: r ? r.chem : 0, nocut: r ? r.nocut : 0, due: (tdue[shop + '|' + n] || {}).due || 0, overdue: (tdue[shop + '|' + n] || {}).overdue || 0, calc: r ? r.calc : '', over: r ? r.over : '', paid: r ? r.paid : '', note: r ? r.note : '', exists: !!r }; });
   rows.sort((a, b) => (b.main - a.main) || (b.punched - a.punched));
   const sl = slipRows(x => x.d === day && x.shop === shop && slipCounted(x)), bk = slipRows(x => x.d === day && x.shop === shop && x.note === 'สมุด'), tips = expenseRows().filter(x => x.d === day && x.shop === shop && x.type === 'ทิปช่าง');
   rows.forEach(r => { const m = sl.filter(x => x.name === r.name); r.slips = m.map(x => ({ row: x.row, amount: x.amount, read: x.read, link: x.link, at: x.at, note: x.note, badPay: slipBadPay(x) })); r.tips = tips.filter(x => x.name === r.name).reduce((a, x) => a + x.amt, 0); });
@@ -222,16 +222,21 @@ function dailySave(a, p) {
   try {
     const day = parseYmd(p.date); if (!day) return { ok: false, msg: 'วันที่ไม่ถูกต้อง' }; const shop = clean(p.shop, 20); if (!shops().find(s => s.name === shop)) return { ok: false, msg: 'ไม่พบร้าน' };
     const ex = dailyRows(r => r.d === p.date && r.shop === shop); const s = sh(SH_DAILY); let n = 0, deleted = 0;
-    if (s.getMaxColumns() < D_TIP) s.insertColumnsAfter(s.getMaxColumns(), D_TIP - s.getMaxColumns());
-    if (s.getRange(1, D_TIP).getValue() === '') s.getRange(1, D_TIP).setValue('ทิปโอน');
+    if (s.getMaxColumns() < D_NOCUT) s.insertColumnsAfter(s.getMaxColumns(), D_NOCUT - s.getMaxColumns());
+    [[D_TIP, 'ทิปโอน'], [D_DYE, 'ยอดงานย้อม'], [D_CHEM, 'ยอดงานเคมี'], [D_NOCUT, 'หัวงานย้อม/เคมี']].forEach(([c, t]) => { if (s.getRange(1, c).getValue() === '') s.getRange(1, c).setValue(t); });
+    const shopObj = shops().find(x => x.name === shop), perHead = shopObj && shopObj.method === 'ต่อหัว';
+    for (const r of (p.rows || [])) { const sv = r.sales === '' ? num(r.cash) + num(r.transfer) : num(r.sales), dy = num(r.dye), ch = num(r.chem), nc = num(r.nocut);
+      if (dy < 0 || ch < 0 || nc < 0) return { ok: false, msg: clean(r.name, 30) + ': ยอดย้อม/เคมีติดลบไม่ได้' };
+      if (dy + ch > sv) return { ok: false, msg: clean(r.name, 30) + ': ยอดย้อม + เคมี มากกว่ายอดขาย' };
+      if (perHead && nc > num(r.heads)) return { ok: false, msg: clean(r.name, 30) + ': หัวงานย้อม/เคมี มากกว่าจำนวนหัว' }; }
     (p.rows || []).forEach(r => {
       const name = clean(r.name, 30); if (!name) return;
       const heads = r.heads === '' ? '' : num(r.heads), cash = r.cash === '' ? '' : num(r.cash), tr = r.transfer === '' ? '' : num(r.transfer); let sales = r.sales === '' ? '' : num(r.sales); if ((sales === '' || sales === 0) && (cash !== '' || tr !== '')) sales = num(cash) + num(tr); const over = r.over === '' || r.over == null ? '' : num(r.over);
       const cur = ex.find(e => e.name === name);
       const tip = r.tip === '' || r.tip == null ? 0 : Math.max(0, Math.round(num(r.tip)));
-      if (heads === '' && sales === '' && cash === '' && tr === '') { if (cur && r.remove) { [[1, 7], [D_OVER, 1], [D_NOTE, 1], [D_BY, 1], [D_TIP, 1]].forEach(([c, w]) => s.getRange(cur.row, c, 1, w).clearContent()); deleted++; } return; } // ไม่แตะคอลัมน์สูตร (H J L N O P)
+      if (heads === '' && sales === '' && cash === '' && tr === '') { if (cur && r.remove) { [[1, 7], [D_OVER, 1], [D_NOTE, 1], [D_BY, 1], [D_TIP, 1], [D_DYE, 3]].forEach(([c, w]) => s.getRange(cur.row, c, 1, w).clearContent()); deleted++; } return; } // ไม่แตะคอลัมน์สูตร (H J L N O P)
       const vals = [[day, shop, name, heads, sales, cash, tr]]; const row = cur ? cur.row : s.getLastRow() + 1;
-      s.getRange(row, 1, 1, 7).setValues(vals); s.getRange(row, D_OVER).setValue(over); s.getRange(row, D_NOTE).setValue(clean(r.note, 120)); s.getRange(row, D_BY).setValue(a.name); s.getRange(row, D_DATE).setNumberFormat('yyyy-mm-dd'); if (r.tip !== undefined) s.getRange(row, D_TIP).setValue(tip).setNumberFormat('#,##0'); n++;
+      s.getRange(row, 1, 1, 7).setValues(vals); s.getRange(row, D_OVER).setValue(over); s.getRange(row, D_NOTE).setValue(clean(r.note, 120)); s.getRange(row, D_BY).setValue(a.name); s.getRange(row, D_DATE).setNumberFormat('yyyy-mm-dd'); if (r.tip !== undefined) s.getRange(row, D_TIP).setValue(tip).setNumberFormat('#,##0'); if (r.dye !== undefined) s.getRange(row, D_DYE, 1, 3).setValues([[num(r.dye) || '', num(r.chem) || '', perHead && num(r.nocut) ? num(r.nocut) : '']]); n++;
     });
     SpreadsheetApp.flush();
     clearMemo();
